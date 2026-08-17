@@ -22,13 +22,20 @@ class ProductModelAdapter extends TypeAdapter<ProductModel> {
       barcode: fields[2] as String,
       price: fields[3] as double,
       stock: fields[4] as int,
+      sku: fields[5] as String?,
+      category: fields[6] as String?,
+      brand: fields[7] as String?,
+      size: fields[8] as String?,
+      imagePaths: (fields[9] as List).cast<String>(),
+      embedding: (fields[10] as List?)?.cast<double>(),
+      ocrText: fields[11] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, ProductModel obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(12)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -38,7 +45,21 @@ class ProductModelAdapter extends TypeAdapter<ProductModel> {
       ..writeByte(3)
       ..write(obj.price)
       ..writeByte(4)
-      ..write(obj.stock);
+      ..write(obj.stock)
+      ..writeByte(5)
+      ..write(obj.sku)
+      ..writeByte(6)
+      ..write(obj.category)
+      ..writeByte(7)
+      ..write(obj.brand)
+      ..writeByte(8)
+      ..write(obj.size)
+      ..writeByte(9)
+      ..write(obj.imagePaths)
+      ..writeByte(10)
+      ..write(obj.embedding)
+      ..writeByte(11)
+      ..write(obj.ocrText);
   }
 
   @override
