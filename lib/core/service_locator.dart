@@ -11,6 +11,11 @@ import '../../features/settings/data/repositories/printer_repository_impl.dart';
 import '../../features/settings/domain/repositories/printer_repository.dart';
 import '../../features/settings/presentation/bloc/printer_bloc.dart';
 import 'package:billing_app/core/utils/image_storage_service.dart';
+import '../../features/smart_recognition/data/services/ocr_service.dart';
+import '../../features/smart_recognition/data/services/embedding_service.dart';
+import '../../features/smart_recognition/data/services/vector_search_service.dart';
+import '../../features/smart_recognition/data/services/ranking_service.dart';
+import '../../features/smart_recognition/presentation/bloc/recognition_bloc.dart';
 
 final sl = GetIt.instance;
 
@@ -36,6 +41,16 @@ Future<void> init() async {
   sl.registerFactory(
     () => PrinterBloc(
       repository: sl(),
+    ),
+  );
+
+  // Features - Smart Recognition Bloc
+  sl.registerFactory(
+    () => RecognitionBloc(
+      ocrService: sl(),
+      embeddingService: sl(),
+      rankingService: sl(),
+      imageStorageService: sl(),
     ),
   );
 
@@ -69,5 +84,20 @@ Future<void> init() async {
   // Core Services - Smart Recognition
   sl.registerLazySingleton<ImageStorageService>(
     () => ImageStorageService(),
+  );
+  sl.registerLazySingleton<OcrService>(
+    () => OcrService(),
+  );
+  sl.registerLazySingleton<EmbeddingService>(
+    () => EmbeddingService(),
+  );
+  sl.registerLazySingleton<VectorSearchService>(
+    () => VectorSearchService(),
+  );
+  sl.registerLazySingleton<RankingService>(
+    () => RankingService(
+      ocrService: sl(),
+      vectorSearchService: sl(),
+    ),
   );
 }

@@ -173,6 +173,23 @@ class _HomePageState extends State<HomePage> {
                     }
                   },
                 ),
+                const SizedBox(height: 16),
+                // Smart Recognition (AI) button
+                _buildOverlayButton(
+                  icon: Icons.auto_awesome,
+                  color: AppTheme.primaryColor.withValues(alpha: 0.7),
+                  onPressed: () async {
+                    _scannerController.stop();
+                    final result = await context.push('/recognize');
+                    if (result != null && mounted) {
+                      // If a product was returned, add it to cart
+                      context.read<BillingBloc>().add(
+                            ScanBarcodeEvent((result as dynamic).barcode),
+                          );
+                    }
+                    if (_isCameraOn && mounted) _scannerController.start();
+                  },
+                ),
               ],
             ),
           ),
