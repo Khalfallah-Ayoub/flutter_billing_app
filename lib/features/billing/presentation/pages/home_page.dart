@@ -8,6 +8,8 @@ import '../../../billing/presentation/bloc/billing_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/primary_button.dart';
 import '../../domain/entities/cart_item.dart';
+import '../../../../core/data/hive_database.dart';
+import '../../../product/domain/entities/product.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -24,6 +26,9 @@ class _HomePageState extends State<HomePage> {
 
   bool _isCameraOn = true;
   bool _isFlashOn = false;
+  bool _isSearchOpen = false;
+  final TextEditingController _searchController = TextEditingController();
+  List<Product> _searchResults = [];
 
   // Cooldown mapping to prevent rapid firing of the same barcode
   final Map<String, DateTime> _lastScanTimes = {};
@@ -31,7 +36,43 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _scannerController.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  void _onSearchChanged(String query) {
+    if (query.trim().isEmpty) {
+      setState(() => _searchResults = []);
+      return;
+    }
+    final lowerQuery = query.toLowerCase();
+    final allProducts = HiveDatabase.productBox.values
+        .map((m) => m.toEntity())
+        .where((p) =>
+            p.name.toLowerCase().contains(lowerQuery) ||
+            (p.brand != null && p.brand!.toLowerCase().contains(lowerQuery)) ||
+            (p.category != null && p.category!.toLowerCase().contains(lowerQuery)) ||
+            p.barcode.toLowerCase().contains(lowerQuery))
+        .take(8)
+        .toList();
+    setState(() => _searchResults = allProducts);
+  }
+
+  void _addProductFromSearch(Product product) {
+    context.read<BillingBloc>().add(AddProductToCartEvent(product));
+    setState(() {
+      _searchController.clear();
+      _searchResults = [];
+      _isSearchOpen = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('✅ ${product.name} added'),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 1),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   void _onDetect(BarcodeCapture capture) async {
@@ -345,32 +386,63 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
 
-          // Header
+          // Header with search toggle
           BlocBuilder<BillingBloc, BillingState>(
             builder: (context, state) {
               final totalItems =
                   state.cartItems.fold<int>(0, (sum, i) => sum + i.quantity);
               return Padding(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Scanned Items',
-                            style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.w600)),
-                        Text('$totalItems items total',
-                            style: const TextStyle(
-                                fontSize: 12, color: Colors.grey)),
-                      ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Scanned Items',
+                              style: TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.w600)),
+                          Text('$totalItems items total',
+                              style: const TextStyle(
+                                  fontSize: 12, color: Colors.grey)),
+                        ],
+                      ),
                     ),
+                    // Search toggle button
+                    Material(
+                      color: _isSearchOpen
+                          ? AppTheme.primaryColor
+                          : AppTheme.primaryColor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            _isSearchOpen = !_isSearchOpen;
+                            if (!_isSearchOpen) {
+                              _searchController.clear();
+                              _searchResults = [];
+                            }
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Icon(
+                            _isSearchOpen ? Icons.close : Icons.search,
+                            size: 20,
+                            color: _isSearchOpen
+                                ? Colors.white
+                                : AppTheme.primaryColor,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text('TOTAL PRICE',
+                        const Text('TOTAL',
                             style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
@@ -390,6 +462,16 @@ class _HomePageState extends State<HomePage> {
               );
             },
           ),
+
+          // Search bar (animated expand/collapse)
+          AnimatedSize(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            child: _isSearchOpen
+                ? _buildSearchSection()
+                : const SizedBox.shrink(),
+          ),
+
           const Divider(height: 1),
 
           // List View
@@ -397,8 +479,12 @@ class _HomePageState extends State<HomePage> {
             child: Stack(children: [
               BlocBuilder<BillingBloc, BillingState>(
                 builder: (context, state) {
-                  if (state.cartItems.isEmpty) {
+                  if (state.cartItems.isEmpty && !_isSearchOpen) {
                     return _buildEmptyCart();
+                  }
+
+                  if (state.cartItems.isEmpty && _isSearchOpen) {
+                    return _buildSearchHint();
                   }
 
                   return ListView.separated(
@@ -416,6 +502,170 @@ class _HomePageState extends State<HomePage> {
               ),
             ]),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchSection() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Search input
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: TextField(
+              controller: _searchController,
+              onChanged: _onSearchChanged,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Search by name, brand, or barcode...',
+                hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                prefixIcon: Icon(Icons.search, color: Colors.grey[400], size: 20),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(Icons.clear, color: Colors.grey[400], size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          _onSearchChanged('');
+                        },
+                      )
+                    : null,
+                border: InputBorder.none,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+
+          // Search results
+          if (_searchResults.isNotEmpty) ..._buildSearchResults(),
+
+          // No results message
+          if (_searchController.text.isNotEmpty && _searchResults.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'No products found for "${_searchController.text}"',
+                style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildSearchResults() {
+    return [
+      const SizedBox(height: 6),
+      Container(
+        constraints: const BoxConstraints(maxHeight: 200),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[200]!),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ListView.separated(
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          itemCount: _searchResults.length,
+          separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey[100]),
+          itemBuilder: (context, index) {
+            final product = _searchResults[index];
+            return InkWell(
+              onTap: () => _addProductFromSearch(product),
+              borderRadius: index == 0
+                  ? const BorderRadius.vertical(top: Radius.circular(12))
+                  : index == _searchResults.length - 1
+                      ? const BorderRadius.vertical(bottom: Radius.circular(12))
+                      : BorderRadius.zero,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  children: [
+                    // Product icon/thumbnail
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.inventory_2_outlined,
+                          size: 18, color: AppTheme.primaryColor),
+                    ),
+                    const SizedBox(width: 10),
+                    // Product details
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(product.name,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 13),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                          Row(
+                            children: [
+                              Text('₹${product.price.toStringAsFixed(2)}',
+                                  style: TextStyle(
+                                      color: Colors.grey[600], fontSize: 12)),
+                              if (product.brand != null) ...[                                const SizedBox(width: 6),
+                                Text('• ${product.brand}',
+                                    style: TextStyle(
+                                        color: Colors.grey[400], fontSize: 11)),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Add button
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.add, size: 18, color: Colors.green),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    ];
+  }
+
+  Widget _buildSearchHint() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.search, size: 48, color: Colors.grey[300]),
+          const SizedBox(height: 12),
+          const Text('Search Products',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+          const SizedBox(height: 6),
+          Text('Type a product name, brand, or barcode',
+              style: TextStyle(fontSize: 13, color: Colors.grey[500])),
         ],
       ),
     );
