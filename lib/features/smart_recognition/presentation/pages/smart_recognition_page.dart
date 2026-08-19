@@ -285,6 +285,10 @@ class _SmartRecognitionPageState extends State<SmartRecognitionPage> {
   }
 
   Widget _buildResults(BuildContext blocContext, RecognitionState state) {
+    final topScore = state.results.first.finalScore;
+    final hasEmbeddings =
+        state.results.any((r) => r.visualScore > 0);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -294,6 +298,59 @@ class _SmartRecognitionPageState extends State<SmartRecognitionPage> {
         Text('Tap to confirm the correct product',
             style: TextStyle(fontSize: 12, color: Colors.grey[600])),
         const SizedBox(height: 12),
+
+        // Low confidence warning
+        if (topScore < 0.4) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: Colors.orange.withValues(alpha: 0.2)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded,
+                    size: 18, color: Colors.orange),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Low confidence — consider searching manually',
+                    style: TextStyle(fontSize: 12, color: Colors.orange),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
+        // No embeddings hint
+        if (!hasEmbeddings) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline,
+                    size: 16, color: Colors.blue[400]),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Add images to products for better visual matching',
+                    style: TextStyle(fontSize: 11, color: Colors.blueGrey),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
         ...state.results.asMap().entries.map((entry) {
           final index = entry.key;
           final result = entry.value;

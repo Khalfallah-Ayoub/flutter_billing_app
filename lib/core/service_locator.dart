@@ -28,6 +28,7 @@ Future<void> init() async {
       addProductUseCase: sl(),
       updateProductUseCase: sl(),
       deleteProductUseCase: sl(),
+      embeddingService: sl<EmbeddingService>(),
     ),
   );
 

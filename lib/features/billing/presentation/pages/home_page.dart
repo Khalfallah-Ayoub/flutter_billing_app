@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -27,6 +28,8 @@ class _HomePageState extends State<HomePage> {
   bool _isCameraOn = true;
   bool _isFlashOn = false;
   bool _isSearchOpen = false;
+  bool _showBarcodeHint = false;
+  Timer? _barcodeHintTimer;
   final TextEditingController _searchController = TextEditingController();
   List<Product> _searchResults = [];
 
@@ -34,10 +37,34 @@ class _HomePageState extends State<HomePage> {
   final Map<String, DateTime> _lastScanTimes = {};
 
   @override
+  void initState() {
+    super.initState();
+    _startBarcodeHintTimer();
+  }
+
+  @override
   void dispose() {
     _scannerController.dispose();
     _searchController.dispose();
+    _barcodeHintTimer?.cancel();
     super.dispose();
+  }
+
+  void _startBarcodeHintTimer() {
+    _barcodeHintTimer?.cancel();
+    _showBarcodeHint = false;
+    _barcodeHintTimer = Timer(const Duration(seconds: 8), () {
+      if (mounted && _isCameraOn) {
+        setState(() => _showBarcodeHint = true);
+      }
+    });
+  }
+
+  void _resetBarcodeHintTimer() {
+    if (_showBarcodeHint) {
+      setState(() => _showBarcodeHint = false);
+    }
+    _startBarcodeHintTimer();
   }
 
   void _onSearchChanged(String query) {
@@ -92,6 +119,7 @@ class _HomePageState extends State<HomePage> {
         }
 
         _lastScanTimes[rawValue] = now;
+        _resetBarcodeHintTimer();
 
         // Vibrate
         final hasVibrator = await Vibration.hasVibrator();
@@ -221,14 +249,18 @@ class _HomePageState extends State<HomePage> {
                   color: AppTheme.primaryColor.withValues(alpha: 0.7),
                   onPressed: () async {
                     _scannerController.stop();
+                    _barcodeHintTimer?.cancel();
+                    setState(() => _showBarcodeHint = false);
                     final result = await context.push('/recognize');
-                    if (result != null && mounted) {
-                      // If a product was returned, add it to cart
+                    if (result != null && result is Product && mounted) {
                       context.read<BillingBloc>().add(
-                            ScanBarcodeEvent((result as dynamic).barcode),
+                            AddProductToCartEvent(result),
                           );
                     }
-                    if (_isCameraOn && mounted) _scannerController.start();
+                    if (_isCameraOn && mounted) {
+                      _scannerController.start();
+                      _startBarcodeHintTimer();
+                    }
                   },
                 ),
               ],
@@ -253,6 +285,58 @@ class _HomePageState extends State<HomePage> {
                     _buildCorner(Alignment.bottomLeft),
                     _buildCorner(Alignment.bottomRight),
                   ],
+                ),
+              ),
+            ),
+
+          // Barcode timeout hint
+          if (_isCameraOn && _showBarcodeHint)
+            Positioned(
+              bottom: 32,
+              left: 24,
+              right: 24,
+              child: GestureDetector(
+                onTap: () async {
+                  _scannerController.stop();
+                  _barcodeHintTimer?.cancel();
+                  setState(() => _showBarcodeHint = false);
+                  final result = await context.push('/recognize');
+                  if (result != null && result is Product && mounted) {
+                    context.read<BillingBloc>().add(
+                          AddProductToCartEvent(result),
+                        );
+                  }
+                  if (_isCameraOn && mounted) {
+                    _scannerController.start();
+                    _startBarcodeHintTimer();
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.black87,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.auto_awesome,
+                          size: 16,
+                          color: Colors.amber[300]),
+                      const SizedBox(width: 8),
+                      const Flexible(
+                        child: Text(
+                          'No barcode detected — Try Smart Recognition',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

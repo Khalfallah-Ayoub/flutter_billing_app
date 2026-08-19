@@ -8,6 +8,7 @@ import '../../data/services/embedding_service.dart';
 import '../../data/services/ranking_service.dart';
 import '../../domain/entities/ocr_result.dart';
 import '../../domain/entities/ranked_product.dart';
+import '../../domain/entities/feedback_record.dart';
 import '../../../product/domain/entities/product.dart';
 import '../../../product/data/models/product_model.dart';
 import '../../../../core/data/hive_database.dart';
@@ -105,6 +106,13 @@ class RecognitionBloc extends Bloc<RecognitionEvent, RecognitionState> {
     Emitter<RecognitionState> emit,
   ) async {
     try {
+      // Determine if this was the top suggestion
+      final topSuggestionId =
+          state.results.isNotEmpty ? state.results.first.product.id : null;
+      final wasCorrect = topSuggestionId == event.confirmedProduct.id;
+      final confidence =
+          state.results.isNotEmpty ? state.results.first.finalScore : 0.0;
+
       // Save the image for this product
       String? savedPath;
       if (!kIsWeb) {
@@ -114,7 +122,7 @@ class RecognitionBloc extends Bloc<RecognitionEvent, RecognitionState> {
         );
       }
 
-      // Update product with new image and OCR text
+      // Update product with new image, OCR text, and auto-embed
       final existingModel =
           HiveDatabase.productBox.get(event.confirmedProduct.id);
       if (existingModel != null) {
@@ -124,6 +132,15 @@ class RecognitionBloc extends Bloc<RecognitionEvent, RecognitionState> {
         }
 
         final ocrText = state.ocrResult?.fullText;
+
+        // Auto-generate embedding if product doesn't have one yet
+        List<double>? updatedEmbedding = existingModel.embedding;
+        if (updatedEmbedding == null || updatedEmbedding.isEmpty) {
+          final imgPath = savedPath ?? event.imagePath;
+          updatedEmbedding =
+              await embeddingService.generateEmbedding(imgPath);
+        }
+
         final updatedModel = ProductModel(
           id: existingModel.id,
           name: existingModel.name,
@@ -135,20 +152,23 @@ class RecognitionBloc extends Bloc<RecognitionEvent, RecognitionState> {
           brand: existingModel.brand,
           size: existingModel.size,
           imagePaths: updatedPaths,
-          embedding: existingModel.embedding,
+          embedding: updatedEmbedding,
           ocrText: ocrText ?? existingModel.ocrText,
         );
 
         await HiveDatabase.productBox.put(existingModel.id, updatedModel);
       }
 
-      // Save feedback record
-      await HiveDatabase.feedbackBox.add({
-        'productId': event.confirmedProduct.id,
-        'imagePath': savedPath ?? event.imagePath,
-        'action': 'confirmed',
-        'timestamp': DateTime.now().toIso8601String(),
-      });
+      // Save structured feedback record
+      final feedback = FeedbackRecord(
+        queryImagePath: savedPath ?? event.imagePath,
+        suggestedProductId: topSuggestionId,
+        selectedProductId: event.confirmedProduct.id,
+        confidence: confidence,
+        wasCorrect: wasCorrect,
+        timestamp: DateTime.now(),
+      );
+      await HiveDatabase.feedbackBox.add(feedback.toMap());
     } catch (e) {
       debugPrint('RecognitionBloc: confirm feedback error: $e');
     }
@@ -161,12 +181,51 @@ class RecognitionBloc extends Bloc<RecognitionEvent, RecognitionState> {
     Emitter<RecognitionState> emit,
   ) async {
     try {
-      await HiveDatabase.feedbackBox.add({
-        'productId': event.manualProduct.id,
-        'imagePath': event.imagePath,
-        'action': 'corrected',
-        'timestamp': DateTime.now().toIso8601String(),
-      });
+      final topSuggestionId =
+          state.results.isNotEmpty ? state.results.first.product.id : null;
+      final confidence =
+          state.results.isNotEmpty ? state.results.first.finalScore : 0.0;
+
+      // Save feedback: correction
+      final feedback = FeedbackRecord(
+        queryImagePath: event.imagePath,
+        suggestedProductId: topSuggestionId,
+        selectedProductId: event.manualProduct.id,
+        confidence: confidence,
+        wasCorrect: false,
+        timestamp: DateTime.now(),
+      );
+      await HiveDatabase.feedbackBox.add(feedback.toMap());
+
+      // Auto-generate embedding for the correct product
+      if (!kIsWeb) {
+        final existingModel =
+            HiveDatabase.productBox.get(event.manualProduct.id);
+        if (existingModel != null &&
+            (existingModel.embedding == null ||
+                existingModel.embedding!.isEmpty)) {
+          final embedding =
+              await embeddingService.generateEmbedding(event.imagePath);
+          if (embedding != null) {
+            final updatedModel = ProductModel(
+              id: existingModel.id,
+              name: existingModel.name,
+              barcode: existingModel.barcode,
+              price: existingModel.price,
+              stock: existingModel.stock,
+              sku: existingModel.sku,
+              category: existingModel.category,
+              brand: existingModel.brand,
+              size: existingModel.size,
+              imagePaths: existingModel.imagePaths,
+              embedding: embedding,
+              ocrText: existingModel.ocrText,
+            );
+            await HiveDatabase.productBox
+                .put(existingModel.id, updatedModel);
+          }
+        }
+      }
     } catch (e) {
       debugPrint('RecognitionBloc: reject feedback error: $e');
     }
