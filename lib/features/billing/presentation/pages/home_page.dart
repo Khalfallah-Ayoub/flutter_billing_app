@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +13,7 @@ import '../../../../core/widgets/primary_button.dart';
 import '../../domain/entities/cart_item.dart';
 import '../../../../core/data/hive_database.dart';
 import '../../../product/domain/entities/product.dart';
+import '../../../../core/utils/app_constants.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -72,14 +75,20 @@ class _HomePageState extends State<HomePage> {
       setState(() => _searchResults = []);
       return;
     }
-    final lowerQuery = query.toLowerCase();
+    // Multi-word search: every word must match at least one field
+    final queryWords = query.toLowerCase().split(RegExp(r'\s+'));
     final allProducts = HiveDatabase.productBox.values
         .map((m) => m.toEntity())
-        .where((p) =>
-            p.name.toLowerCase().contains(lowerQuery) ||
-            (p.brand != null && p.brand!.toLowerCase().contains(lowerQuery)) ||
-            (p.category != null && p.category!.toLowerCase().contains(lowerQuery)) ||
-            p.barcode.toLowerCase().contains(lowerQuery))
+        .where((p) {
+          final fields = [
+            p.name.toLowerCase(),
+            p.barcode.toLowerCase(),
+            if (p.brand != null) p.brand!.toLowerCase(),
+            if (p.category != null) p.category!.toLowerCase(),
+            if (p.size != null) p.size!.toLowerCase(),
+          ].join(' ');
+          return queryWords.every((word) => fields.contains(word));
+        })
         .take(8)
         .toList();
     setState(() => _searchResults = allProducts);
@@ -243,25 +252,11 @@ class _HomePageState extends State<HomePage> {
                   },
                 ),
                 const SizedBox(height: 16),
-                // Smart Recognition (AI) button
+                // Smart Recognition (AI) overlay button
                 _buildOverlayButton(
                   icon: Icons.auto_awesome,
-                  color: AppTheme.primaryColor.withValues(alpha: 0.7),
-                  onPressed: () async {
-                    _scannerController.stop();
-                    _barcodeHintTimer?.cancel();
-                    setState(() => _showBarcodeHint = false);
-                    final result = await context.push('/recognize');
-                    if (result != null && result is Product && mounted) {
-                      context.read<BillingBloc>().add(
-                            AddProductToCartEvent(result),
-                          );
-                    }
-                    if (_isCameraOn && mounted) {
-                      _scannerController.start();
-                      _startBarcodeHintTimer();
-                    }
-                  },
+                  color: AppTheme.primaryColor,
+                  onPressed: _openSmartRecognition,
                 ),
               ],
             ),
@@ -289,60 +284,54 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-          // Barcode timeout hint
-          if (_isCameraOn && _showBarcodeHint)
+          // Primary AI Recognition Action Button (Prominent Floating Pill)
+          if (_isCameraOn)
             Positioned(
-              bottom: 32,
-              left: 24,
-              right: 24,
-              child: GestureDetector(
-                onTap: () async {
-                  _scannerController.stop();
-                  _barcodeHintTimer?.cancel();
-                  setState(() => _showBarcodeHint = false);
-                  final result = await context.push('/recognize');
-                  if (result != null && result is Product && mounted) {
-                    context.read<BillingBloc>().add(
-                          AddProductToCartEvent(result),
-                        );
-                  }
-                  if (_isCameraOn && mounted) {
-                    _scannerController.start();
-                    _startBarcodeHintTimer();
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.black87,
-                    borderRadius: BorderRadius.circular(12),
+              bottom: 28,
+              left: 32,
+              right: 32,
+              child: ElevatedButton.icon(
+                onPressed: _openSmartRecognition,
+                icon: const Icon(Icons.auto_awesome, color: Colors.white, size: 20),
+                label: const Text(
+                  '✨ Smart AI Search (Default)',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Colors.white,
+                    letterSpacing: 0.5,
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.auto_awesome,
-                          size: 16,
-                          color: Colors.amber[300]),
-                      const SizedBox(width: 8),
-                      const Flexible(
-                        child: Text(
-                          'No barcode detected — Try Smart Recognition',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500),
-                        ),
-                      ),
-                    ],
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 20),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28),
                   ),
+                  elevation: 8,
+                  shadowColor: AppTheme.primaryColor.withValues(alpha: 0.6),
                 ),
               ),
             ),
         ],
       ),
     );
+  }
+
+  Future<void> _openSmartRecognition() async {
+    _scannerController.stop();
+    _barcodeHintTimer?.cancel();
+    setState(() => _showBarcodeHint = false);
+    final result = await context.push('/recognize');
+    if (result != null && result is Product && mounted) {
+      context.read<BillingBloc>().add(
+            AddProductToCartEvent(result),
+          );
+    }
+    if (_isCameraOn && mounted) {
+      _scannerController.start();
+      _startBarcodeHintTimer();
+    }
   }
 
   Widget _buildCameraOffState() {
@@ -533,7 +522,7 @@ class _HomePageState extends State<HomePage> {
                                 color: Colors.grey,
                                 letterSpacing: 1.2)),
                         Text(
-                          '₹${state.totalAmount.toStringAsFixed(2)}',
+                          AppConstants.formatPrice(state.totalAmount),
                           style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w900,
@@ -706,7 +695,7 @@ class _HomePageState extends State<HomePage> {
                               overflow: TextOverflow.ellipsis),
                           Row(
                             children: [
-                              Text('₹${product.price.toStringAsFixed(2)}',
+                              Text(AppConstants.formatPrice(product.price),
                                   style: TextStyle(
                                       color: Colors.grey[600], fontSize: 12)),
                               if (product.brand != null) ...[                                const SizedBox(width: 6),
@@ -806,6 +795,28 @@ class _HomePageState extends State<HomePage> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         spacing: 1,
         children: [
+          // Product thumbnail
+          Container(
+            width: 40,
+            height: 40,
+            margin: const EdgeInsets.only(right: 10),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: item.product.imagePaths.isNotEmpty && !kIsWeb
+                ? Image.file(
+                    File(item.product.imagePaths.first),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Icon(
+                        Icons.inventory_2_outlined,
+                        color: AppTheme.primaryColor,
+                        size: 20),
+                  )
+                : const Icon(Icons.inventory_2_outlined,
+                    color: AppTheme.primaryColor, size: 20),
+          ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -819,7 +830,7 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '₹${item.product.price.toStringAsFixed(2)}',
+                  AppConstants.formatPrice(item.product.price),
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,

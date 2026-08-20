@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:app_settings/app_settings.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/theme/theme_cubit.dart';
 import '../../../shop/presentation/bloc/shop_bloc.dart';
 import '../bloc/printer_bloc.dart';
 import '../bloc/printer_event.dart';
@@ -45,7 +46,7 @@ class _SettingsPageState extends State<SettingsPage> {
             // Profile Section
             Container(
               width: double.infinity,
-              color: Colors.white,
+              color: Theme.of(context).cardTheme.color,
               padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
               child: BlocBuilder<ShopBloc, ShopState>(
                 builder: (context, state) {
@@ -213,6 +214,54 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
 
+            const SizedBox(height: 24),
+
+            // Appearance Section
+            _buildSectionHeader('Appearance'),
+            BlocBuilder<ThemeCubit, ThemeMode>(
+              builder: (context, themeMode) {
+                return _buildListGroup(
+                  children: [
+                    _buildListItem(
+                      icon: Icons.dark_mode_rounded,
+                      title: 'Dark Mode',
+                      subtitle: themeMode == ThemeMode.dark
+                          ? 'On'
+                          : themeMode == ThemeMode.light
+                              ? 'Off'
+                              : 'System default',
+                      trailingWidget: Switch(
+                        value: themeMode == ThemeMode.dark,
+                        onChanged: (val) {
+                          context.read<ThemeCubit>().setTheme(
+                              val ? ThemeMode.dark : ThemeMode.light);
+                        },
+                        activeColor: AppTheme.primaryColor,
+                      ),
+                      trailingIcon: null,
+                    ),
+                    _buildDivider(),
+                    _buildListItem(
+                      icon: Icons.phone_android,
+                      title: 'Follow System',
+                      subtitle: 'Use device theme setting',
+                      trailingWidget: Radio<ThemeMode>(
+                        value: ThemeMode.system,
+                        groupValue: themeMode,
+                        onChanged: (val) {
+                          if (val != null) {
+                            context.read<ThemeCubit>().setTheme(val);
+                          }
+                        },
+                        activeColor: AppTheme.primaryColor,
+                      ),
+                      trailingIcon: null,
+                    ),
+                  ],
+                );
+              },
+            ),
+
             const SizedBox(height: 48),
           ],
         ),
@@ -241,7 +290,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey[100]!),
       ),

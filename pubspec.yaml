@@ -50,6 +50,8 @@ dependencies:
   
   # Smart Recognition - OCR
   google_mlkit_text_recognition: ^0.14.0
+  share_plus: ^12.0.2
+  file_picker: ^11.0.3
 
 dev_dependencies:
   flutter_test:

@@ -6,7 +6,9 @@ import 'package:go_router/go_router.dart';
 import '../bloc/product_bloc.dart';
 import '../../domain/entities/product.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/app_constants.dart';
 import '../../../../core/utils/app_validators.dart';
+import '../../../../core/utils/product_export_service.dart';
 
 class ProductListPage extends StatefulWidget {
   const ProductListPage({super.key});
@@ -65,6 +67,82 @@ class _ProductListPageState extends State<ProductListPage> {
         title: const Text('Product Management',
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         centerTitle: true,
+        actions: [
+          BlocBuilder<ProductBloc, ProductState>(
+            builder: (context, state) {
+              return PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert),
+                onSelected: (value) async {
+                  if (value == 'export') {
+                    if (state.products.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('No products to export.')),
+                      );
+                      return;
+                    }
+                    final success = await ProductExportService.shareProducts(
+                        state.products);
+                    if (context.mounted && success) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                              'Exported ${state.products.length} products successfully!'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  } else if (value == 'import') {
+                    try {
+                      final count = await ProductExportService.pickAndImport();
+                      if (count != null && context.mounted) {
+                        context.read<ProductBloc>().add(LoadProducts());
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('✅ Imported $count products!'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error importing products: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'export',
+                    child: Row(
+                      children: [
+                        Icon(Icons.upload_file, color: AppTheme.primaryColor),
+                        SizedBox(width: 12),
+                        Text('Export Products (JSON)'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'import',
+                    child: Row(
+                      children: [
+                        Icon(Icons.download_for_offline,
+                            color: AppTheme.primaryColor),
+                        SizedBox(width: 12),
+                        Text('Import Products (JSON)'),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -149,10 +227,19 @@ class _ProductListPageState extends State<ProductListPage> {
                       child: Text('No products found. Add some!'));
                 }
 
+                final queryWords = _searchQuery.split(RegExp(r'\s+'));
                 final filteredProducts = state.products
-                    .where((product) =>
-                        product.name.toLowerCase().contains(_searchQuery) ||
-                        product.barcode.toLowerCase().contains(_searchQuery))
+                    .where((product) {
+                      if (_searchQuery.isEmpty) return true;
+                      final fields = [
+                        product.name.toLowerCase(),
+                        product.barcode.toLowerCase(),
+                        if (product.brand != null) product.brand!.toLowerCase(),
+                        if (product.category != null) product.category!.toLowerCase(),
+                        if (product.size != null) product.size!.toLowerCase(),
+                      ].join(' ');
+                      return queryWords.every((word) => fields.contains(word));
+                    })
                     .toList();
 
                 if (filteredProducts.isEmpty) {
@@ -221,7 +308,7 @@ class _ProductListPageState extends State<ProductListPage> {
                                 Row(
                                   children: [
                                     Text(
-                                      '₹${product.price.toStringAsFixed(2)}',
+                                      AppConstants.formatPrice(product.price),
                                       style: TextStyle(
                                           fontWeight: FontWeight.w500,
                                           color: Colors.grey[600]),

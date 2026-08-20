@@ -105,4 +105,40 @@ class ProductModel extends Product {
       ocrText: ocrText,
     );
   }
+
+  /// Serialize to JSON Map
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'barcode': barcode,
+      'price': price,
+      'stock': stock,
+      'sku': sku,
+      'category': category,
+      'brand': brand,
+      'size': size,
+      'imagePaths': imagePaths,
+      'embedding': embedding,
+      'ocrText': ocrText,
+    };
+  }
+
+  /// Deserialize from JSON Map
+  factory ProductModel.fromMap(Map<String, dynamic> map) {
+    return ProductModel(
+      id: map['id'] as String? ?? '',
+      name: map['name'] as String? ?? '',
+      barcode: map['barcode'] as String? ?? '',
+      price: (map['price'] as num?)?.toDouble() ?? 0.0,
+      stock: (map['stock'] as num?)?.toInt() ?? 0,
+      sku: map['sku'] as String?,
+      category: map['category'] as String?,
+      brand: map['brand'] as String?,
+      size: map['size'] as String?,
+      imagePaths: (map['imagePaths'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      embedding: (map['embedding'] as List?)?.map((e) => (e as num).toDouble()).toList(),
+      ocrText: map['ocrText'] as String?,
+    );
+  }
 }

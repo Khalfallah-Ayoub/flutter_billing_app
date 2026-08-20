@@ -9,6 +9,7 @@ import '../../domain/entities/ranked_product.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/image_storage_service.dart';
 import '../../../../core/service_locator.dart' show sl;
+import '../../../../core/utils/app_constants.dart';
 
 class SmartRecognitionPage extends StatefulWidget {
   const SmartRecognitionPage({super.key});
@@ -467,7 +468,7 @@ class _SmartRecognitionPageState extends State<SmartRecognitionPage> {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Text('₹${product.price.toStringAsFixed(2)}',
+                        Text(AppConstants.formatPrice(product.price),
                             style: TextStyle(
                                 color: Colors.grey[600], fontSize: 13)),
                         if (product.brand != null) ...[

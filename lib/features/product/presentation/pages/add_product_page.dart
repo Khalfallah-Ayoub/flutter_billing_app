@@ -202,7 +202,7 @@ class _AddProductPageState extends State<AddProductPage> {
                       const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(
                     hintText: '0.00',
-                    prefixText: '₹ ',
+                    suffixText: ' د.ج',
                     prefixStyle: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
