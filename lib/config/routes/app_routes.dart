@@ -9,6 +9,9 @@ import '../../features/billing/presentation/pages/scanner_page.dart';
 import '../../features/billing/presentation/pages/checkout_page.dart';
 import '../../features/product/domain/entities/product.dart';
 import '../../features/smart_recognition/presentation/pages/smart_recognition_page.dart';
+import '../../features/pipes/presentation/pages/pipe_list_page.dart';
+import '../../features/pipes/presentation/pages/add_edit_pipe_page.dart';
+import '../../features/pipes/presentation/pages/pipe_cutting_sale_page.dart';
 
 final router = GoRouter(
   initialLocation: '/',
@@ -51,6 +54,26 @@ final router = GoRouter(
           },
         ),
       ],
+    ),
+    GoRoute(
+      path: '/pipes',
+      builder: (context, state) => const PipeListPage(),
+      routes: [
+        GoRoute(
+          path: 'add',
+          builder: (context, state) {
+            final pipe = state.extra as Product?;
+            return AddEditPipePage(pipe: pipe);
+          },
+        ),
+      ],
+    ),
+    GoRoute(
+      path: '/pipe-sales',
+      builder: (context, state) {
+        final initialPipe = state.extra as Product?;
+        return PipeCuttingSalePage(initialPipe: initialPipe);
+      },
     ),
     GoRoute(
       path: '/shop',

@@ -44,6 +44,29 @@ class ProductModel extends Product {
   @HiveField(11)
   final String? ocrText;
 
+  // Pipe fields
+  @override
+  @HiveField(12)
+  final bool isPipe;
+  @override
+  @HiveField(13)
+  final String? pipeType;
+  @override
+  @HiveField(14)
+  final double? fullLength;
+  @override
+  @HiveField(15)
+  final double? fullPrice;
+  @override
+  @HiveField(16)
+  final String? diameter;
+  @override
+  @HiveField(17)
+  final String? origin;
+  @override
+  @HiveField(18)
+  final String? color;
+
   const ProductModel({
     required this.id,
     required this.name,
@@ -57,6 +80,13 @@ class ProductModel extends Product {
     this.imagePaths = const [],
     this.embedding,
     this.ocrText,
+    this.isPipe = false,
+    this.pipeType,
+    this.fullLength,
+    this.fullPrice,
+    this.diameter,
+    this.origin,
+    this.color,
   }) : super(
           id: id,
           name: name,
@@ -70,6 +100,13 @@ class ProductModel extends Product {
           imagePaths: imagePaths,
           embedding: embedding,
           ocrText: ocrText,
+          isPipe: isPipe,
+          pipeType: pipeType,
+          fullLength: fullLength,
+          fullPrice: fullPrice,
+          diameter: diameter,
+          origin: origin,
+          color: color,
         );
 
   factory ProductModel.fromEntity(Product product) {
@@ -86,6 +123,13 @@ class ProductModel extends Product {
       imagePaths: product.imagePaths,
       embedding: product.embedding,
       ocrText: product.ocrText,
+      isPipe: product.isPipe,
+      pipeType: product.pipeType,
+      fullLength: product.fullLength,
+      fullPrice: product.fullPrice,
+      diameter: product.diameter,
+      origin: product.origin,
+      color: product.color,
     );
   }
 
@@ -103,6 +147,13 @@ class ProductModel extends Product {
       imagePaths: imagePaths,
       embedding: embedding,
       ocrText: ocrText,
+      isPipe: isPipe,
+      pipeType: pipeType,
+      fullLength: fullLength,
+      fullPrice: fullPrice,
+      diameter: diameter,
+      origin: origin,
+      color: color,
     );
   }
 
@@ -121,6 +172,13 @@ class ProductModel extends Product {
       'imagePaths': imagePaths,
       'embedding': embedding,
       'ocrText': ocrText,
+      'isPipe': isPipe,
+      'pipeType': pipeType,
+      'fullLength': fullLength,
+      'fullPrice': fullPrice,
+      'diameter': diameter,
+      'origin': origin,
+      'color': color,
     };
   }
 
@@ -139,6 +197,13 @@ class ProductModel extends Product {
       imagePaths: (map['imagePaths'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       embedding: (map['embedding'] as List?)?.map((e) => (e as num).toDouble()).toList(),
       ocrText: map['ocrText'] as String?,
+      isPipe: map['isPipe'] as bool? ?? false,
+      pipeType: map['pipeType'] as String?,
+      fullLength: (map['fullLength'] as num?)?.toDouble(),
+      fullPrice: (map['fullPrice'] as num?)?.toDouble(),
+      diameter: map['diameter'] as String?,
+      origin: map['origin'] as String?,
+      color: map['color'] as String?,
     );
   }
 }

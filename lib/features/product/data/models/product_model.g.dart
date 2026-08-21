@@ -29,13 +29,20 @@ class ProductModelAdapter extends TypeAdapter<ProductModel> {
       imagePaths: (fields[9] as List).cast<String>(),
       embedding: (fields[10] as List?)?.cast<double>(),
       ocrText: fields[11] as String?,
+      isPipe: fields[12] as bool? ?? false,
+      pipeType: fields[13] as String?,
+      fullLength: (fields[14] as num?)?.toDouble(),
+      fullPrice: (fields[15] as num?)?.toDouble(),
+      diameter: fields[16] as String?,
+      origin: fields[17] as String?,
+      color: fields[18] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, ProductModel obj) {
     writer
-      ..writeByte(12)
+      ..writeByte(19)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -59,7 +66,21 @@ class ProductModelAdapter extends TypeAdapter<ProductModel> {
       ..writeByte(10)
       ..write(obj.embedding)
       ..writeByte(11)
-      ..write(obj.ocrText);
+      ..write(obj.ocrText)
+      ..writeByte(12)
+      ..write(obj.isPipe)
+      ..writeByte(13)
+      ..write(obj.pipeType)
+      ..writeByte(14)
+      ..write(obj.fullLength)
+      ..writeByte(15)
+      ..write(obj.fullPrice)
+      ..writeByte(16)
+      ..write(obj.diameter)
+      ..writeByte(17)
+      ..write(obj.origin)
+      ..writeByte(18)
+      ..write(obj.color);
   }
 
   @override

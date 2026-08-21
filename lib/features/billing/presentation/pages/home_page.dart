@@ -482,6 +482,29 @@ class _HomePageState extends State<HomePage> {
                         ],
                       ),
                     ),
+                    // Pipe POS Shortcut Button
+                    Material(
+                      color: Colors.amber.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      child: InkWell(
+                        onTap: () => context.push('/pipe-sales'),
+                        borderRadius: BorderRadius.circular(10),
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          child: Row(
+                            children: [
+                              Icon(Icons.content_cut, size: 18, color: Colors.amber),
+                              SizedBox(width: 4),
+                              Text(
+                                'قطع أنبوب',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amber),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     // Search toggle button
                     Material(
                       color: _isSearchOpen

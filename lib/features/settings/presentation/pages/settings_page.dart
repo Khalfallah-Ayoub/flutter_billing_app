@@ -110,6 +110,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 _buildDivider(),
                 _buildListItem(
+                  icon: Icons.architecture,
+                  title: 'Pipes & Custom Cuts (إدارة الأنابيب)',
+                  subtitle: 'PVC, Copper, custom length calculator & selling',
+                  onTap: () => context.push('/pipes'),
+                ),
+                _buildDivider(),
+                _buildListItem(
                   icon: Icons.storefront,
                   title: 'Shop Details',
                   subtitle: 'Edit business info & address',

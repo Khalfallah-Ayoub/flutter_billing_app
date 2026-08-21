@@ -17,6 +17,15 @@ class Product extends Equatable {
   final List<double>? embedding;
   final String? ocrText;
 
+  // Pipe Management fields
+  final bool isPipe;
+  final String? pipeType; // 'pvc', 'copper', 'other'
+  final double? fullLength; // in meters (e.g. 6.0 for PVC, 5.0 for copper, 4.0 for other)
+  final double? fullPrice; // price of 1 full pipe
+  final String? diameter; // e.g. '110', '50', 'Ø16'
+  final String? origin; // e.g. 'الجزائر', 'فرنسا'
+  final String? color; // e.g. 'أبيض', 'أسود', 'رمادي'
+
   const Product({
     required this.id,
     required this.name,
@@ -30,7 +39,22 @@ class Product extends Equatable {
     this.imagePaths = const [],
     this.embedding,
     this.ocrText,
+    this.isPipe = false,
+    this.pipeType,
+    this.fullLength,
+    this.fullPrice,
+    this.diameter,
+    this.origin,
+    this.color,
   });
+
+  /// Calculates rate per meter for pipes
+  double get calculatedPricePerMeter {
+    if (isPipe && fullPrice != null && fullLength != null && fullLength! > 0) {
+      return fullPrice! / fullLength!;
+    }
+    return price;
+  }
 
   Product copyWith({
     String? id,
@@ -45,6 +69,13 @@ class Product extends Equatable {
     List<String>? imagePaths,
     List<double>? embedding,
     String? ocrText,
+    bool? isPipe,
+    String? pipeType,
+    double? fullLength,
+    double? fullPrice,
+    String? diameter,
+    String? origin,
+    String? color,
   }) {
     return Product(
       id: id ?? this.id,
@@ -59,6 +90,13 @@ class Product extends Equatable {
       imagePaths: imagePaths ?? this.imagePaths,
       embedding: embedding ?? this.embedding,
       ocrText: ocrText ?? this.ocrText,
+      isPipe: isPipe ?? this.isPipe,
+      pipeType: pipeType ?? this.pipeType,
+      fullLength: fullLength ?? this.fullLength,
+      fullPrice: fullPrice ?? this.fullPrice,
+      diameter: diameter ?? this.diameter,
+      origin: origin ?? this.origin,
+      color: color ?? this.color,
     );
   }
 
@@ -76,5 +114,12 @@ class Product extends Equatable {
         imagePaths,
         embedding,
         ocrText,
+        isPipe,
+        pipeType,
+        fullLength,
+        fullPrice,
+        diameter,
+        origin,
+        color,
       ];
 }
