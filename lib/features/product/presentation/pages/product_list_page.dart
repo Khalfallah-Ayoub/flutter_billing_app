@@ -9,6 +9,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_constants.dart';
 import '../../../../core/utils/app_validators.dart';
 import '../../../../core/utils/product_export_service.dart';
+import '../widgets/import_conflict_dialog.dart';
 
 class ProductListPage extends StatefulWidget {
   const ProductListPage({super.key});
@@ -53,8 +54,6 @@ class _ProductListPageState extends State<ProductListPage> {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = Colors.grey[100]!;
-
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -94,21 +93,28 @@ class _ProductListPageState extends State<ProductListPage> {
                     }
                   } else if (value == 'import') {
                     try {
-                      final count = await ProductExportService.pickAndImport();
-                      if (count != null && context.mounted) {
-                        context.read<ProductBloc>().add(LoadProducts());
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('✅ Imported $count products!'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
+                      final analysis = await ProductExportService.pickAndAnalyze();
+                      if (analysis != null && context.mounted) {
+                        final summary = await ImportConflictDialog.show(context, analysis);
+                        if (summary != null && context.mounted) {
+                          context.read<ProductBloc>().add(LoadProducts());
+                          final added = summary['added'] ?? 0;
+                          final updated = summary['updated'] ?? 0;
+                          final skipped = summary['skipped'] ?? 0;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('✅ اكتمل الاستيراد: إضافة $added جديد، تحديث $updated، وتخطي $skipped مطبق.'),
+                              backgroundColor: Colors.green[700],
+                              duration: const Duration(seconds: 4),
+                            ),
+                          );
+                        }
                       }
                     } catch (e) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('Error importing products: $e'),
+                            content: Text('خطأ في قراءة ملف الاستيراد: $e'),
                             backgroundColor: Colors.red,
                           ),
                         );
@@ -214,6 +220,10 @@ class _ProductListPageState extends State<ProductListPage> {
                 }
               },
               builder: (context, state) {
+                final theme = Theme.of(context);
+                final cardColor = theme.cardTheme.color ?? theme.colorScheme.surface;
+                final borderColor = theme.dividerColor.withValues(alpha: 0.2);
+
                 if (state.status == ProductStatus.loading &&
                     state.products.isEmpty) {
                   return const Center(child: CircularProgressIndicator());
@@ -257,7 +267,7 @@ class _ProductListPageState extends State<ProductListPage> {
                     final product = filteredProducts[index];
                     return Container(
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: cardColor,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: borderColor),
                         boxShadow: const [

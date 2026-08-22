@@ -94,8 +94,8 @@ void main() {
         embedding: [0.5],
       );
 
-      // props should have 12 elements (all fields)
-      expect(product.props, hasLength(12));
+      // props should include all fields
+      expect(product.props, hasLength(21));
     });
 
     test('two Products with same fields should be equal', () {

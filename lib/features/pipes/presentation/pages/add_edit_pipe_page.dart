@@ -9,6 +9,9 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_constants.dart';
 import '../../../../core/utils/app_validators.dart';
 
+import '../../domain/entities/pipe_category.dart';
+import '../../data/services/pipe_category_service.dart';
+
 class AddEditPipePage extends StatefulWidget {
   final Product? pipe;
 
@@ -21,13 +24,16 @@ class AddEditPipePage extends StatefulWidget {
 class _AddEditPipePageState extends State<AddEditPipePage> {
   final _formKey = GlobalKey<FormState>();
 
-  String _pipeType = 'pvc'; // 'pvc', 'copper', 'other'
+  late List<PipeCategory> _availableCategories;
+  String _pipeType = 'pvc';
   final TextEditingController _diameterController = TextEditingController();
   final TextEditingController _lengthController = TextEditingController(text: '6.0');
   final TextEditingController _fullPriceController = TextEditingController();
   final TextEditingController _stockController = TextEditingController(text: '10');
   final TextEditingController _originController = TextEditingController(text: 'الجزائر');
   final TextEditingController _colorController = TextEditingController(text: 'أبيض');
+  final TextEditingController _descController = TextEditingController();
+  final TextEditingController _usageController = TextEditingController();
 
   double _calculatedPricePerMeter = 0.0;
 
@@ -36,6 +42,7 @@ class _AddEditPipePageState extends State<AddEditPipePage> {
   @override
   void initState() {
     super.initState();
+    _availableCategories = PipeCategoryService.getCategories();
     if (isEditing) {
       final p = widget.pipe!;
       _pipeType = p.pipeType ?? 'pvc';
@@ -45,6 +52,13 @@ class _AddEditPipePageState extends State<AddEditPipePage> {
       _stockController.text = p.stock.toString();
       _originController.text = p.origin ?? 'الجزائر';
       _colorController.text = p.color ?? 'أبيض';
+      _descController.text = p.description ?? '';
+      _usageController.text = p.usageInstructions ?? '';
+    } else {
+      if (_availableCategories.isNotEmpty) {
+        _pipeType = _availableCategories.first.name;
+        _lengthController.text = _availableCategories.first.defaultLength.toString();
+      }
     }
     _recalculateMeterRate();
 
@@ -60,19 +74,13 @@ class _AddEditPipePageState extends State<AddEditPipePage> {
     _stockController.dispose();
     _originController.dispose();
     _colorController.dispose();
+    _descController.dispose();
+    _usageController.dispose();
     super.dispose();
   }
 
-  double _getDefaultLength(String type) {
-    switch (type) {
-      case 'pvc':
-        return 6.0;
-      case 'copper':
-        return 5.0;
-      case 'other':
-      default:
-        return 4.0;
-    }
+  double _getDefaultLength(String typeName) {
+    return PipeCategoryService.getDefaultLengthForType(typeName);
   }
 
   void _onPipeTypeChanged(String newType) {
@@ -97,18 +105,7 @@ class _AddEditPipePageState extends State<AddEditPipePage> {
   }
 
   String _generatePipeName() {
-    String typeLabel;
-    switch (_pipeType) {
-      case 'pvc':
-        typeLabel = 'أنبوب PVC';
-        break;
-      case 'copper':
-        typeLabel = 'أنبوب نحاس';
-        break;
-      default:
-        typeLabel = 'أنبوب';
-        break;
-    }
+    String typeLabel = _pipeType.contains('أنبوب') ? _pipeType : 'أنبوب $_pipeType';
     final dia = _diameterController.text.trim();
     final color = _colorController.text.trim();
     final origin = _originController.text.trim();
@@ -130,6 +127,8 @@ class _AddEditPipePageState extends State<AddEditPipePage> {
       final diameter = _diameterController.text.trim();
       final origin = _originController.text.trim();
       final color = _colorController.text.trim();
+      final description = _descController.text.trim();
+      final usage = _usageController.text.trim();
       final pricePerMeter = fullLength > 0 ? (fullPrice / fullLength) : fullPrice;
 
       final pipeProduct = Product(
@@ -145,6 +144,8 @@ class _AddEditPipePageState extends State<AddEditPipePage> {
         diameter: diameter,
         origin: origin,
         color: color,
+        description: description.isNotEmpty ? description : null,
+        usageInstructions: usage.isNotEmpty ? usage : null,
         category: 'أنابيب (Pipes)',
         size: diameter,
         brand: origin,
@@ -185,24 +186,58 @@ class _AddEditPipePageState extends State<AddEditPipePage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Type Selector Header
-              Text(
-                'نوع الأنبوب (Material Type):',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: theme.colorScheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 8),
-
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildTypeChoiceChip('pvc', 'PVC (بلاستيك)', '6.0م', Colors.blue),
-                  const SizedBox(width: 8),
-                  _buildTypeChoiceChip('copper', 'نحاس (Copper)', '5.0م', Colors.orange),
-                  const SizedBox(width: 8),
-                  _buildTypeChoiceChip('other', 'أخرى (Other)', '4.0م', Colors.purple),
+                  Text(
+                    'نوع الفئة / المادة (Material Category):',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () async {
+                      await context.push('/pipes/categories');
+                      setState(() {
+                        _availableCategories = PipeCategoryService.getCategories();
+                      });
+                    },
+                    icon: const Icon(Icons.settings_suggest, size: 18),
+                    label: const Text('إدارة الفئات', style: TextStyle(fontSize: 12)),
+                  ),
                 ],
+              ),
+              const SizedBox(height: 6),
+
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _availableCategories.map<Widget>((cat) {
+                  final isSelected = _pipeType.trim().toLowerCase() == cat.name.trim().toLowerCase() ||
+                      _pipeType.trim().toLowerCase() == cat.id.toLowerCase();
+                  return ChoiceChip(
+                    label: Text('${cat.name} (${cat.defaultLength}م)'),
+                    selected: isSelected,
+                    selectedColor: AppTheme.primaryColor.withValues(alpha: 0.2),
+                    side: BorderSide(
+                        color: isSelected
+                            ? AppTheme.primaryColor
+                            : theme.dividerColor.withValues(alpha: 0.2)),
+                    labelStyle: TextStyle(
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected
+                          ? AppTheme.primaryColor
+                          : theme.colorScheme.onSurface,
+                    ),
+                    onSelected: (val) {
+                      if (val) {
+                        _onPipeTypeChanged(cat.name);
+                      }
+                    },
+                  );
+                }).toList(),
               ),
               const SizedBox(height: 16),
 
@@ -393,6 +428,33 @@ class _AddEditPipePageState extends State<AddEditPipePage> {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // AI Assistant Optional Fields
+                    Text('وصف المادة (اختياري - للمساعد الذكي):',
+                        style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface)),
+                    const SizedBox(height: 6),
+                    TextFormField(
+                      controller: _descController,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        hintText: 'مثلاً: أنبوب مائي عالي التحمل للحرارة والضغط',
+                        prefixIcon: Icon(Icons.description_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    Text('طريقة/تعليمات الاستعمال (اختياري - للمساعد الذكي):',
+                        style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface)),
+                    const SizedBox(height: 6),
+                    TextFormField(
+                      controller: _usageController,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        hintText: 'مثلاً: يتم التلحيم بالحرارة أو التوصيل بالضغط للمياه الصالحة للشرب',
+                        prefixIcon: Icon(Icons.integration_instructions_outlined),
+                      ),
                     ),
                   ],
                 ),

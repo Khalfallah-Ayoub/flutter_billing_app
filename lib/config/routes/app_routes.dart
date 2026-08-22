@@ -13,6 +13,9 @@ import '../../features/pipes/presentation/pages/pipe_list_page.dart';
 import '../../features/pipes/presentation/pages/add_edit_pipe_page.dart';
 import '../../features/pipes/presentation/pages/pipe_cutting_sale_page.dart';
 
+import '../../features/pipes/presentation/pages/pipe_categories_page.dart';
+import '../../features/ai_chat/presentation/pages/ai_chat_page.dart';
+
 final router = GoRouter(
   initialLocation: '/',
   routes: [
@@ -66,6 +69,10 @@ final router = GoRouter(
             return AddEditPipePage(pipe: pipe);
           },
         ),
+        GoRoute(
+          path: 'categories',
+          builder: (context, state) => const PipeCategoriesPage(),
+        ),
       ],
     ),
     GoRoute(
@@ -82,6 +89,10 @@ final router = GoRouter(
     GoRoute(
       path: '/recognize',
       builder: (context, state) => const SmartRecognitionPage(),
+    ),
+    GoRoute(
+      path: '/ai-chat',
+      builder: (context, state) => const AIChatPage(),
     ),
   ],
 );

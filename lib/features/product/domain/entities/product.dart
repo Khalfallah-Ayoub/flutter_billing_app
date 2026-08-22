@@ -26,6 +26,10 @@ class Product extends Equatable {
   final String? origin; // e.g. 'الجزائر', 'فرنسا'
   final String? color; // e.g. 'أبيض', 'أسود', 'رمادي'
 
+  // Description and Usage Instructions for AI assistant or catalog details
+  final String? description;
+  final String? usageInstructions;
+
   const Product({
     required this.id,
     required this.name,
@@ -46,6 +50,8 @@ class Product extends Equatable {
     this.diameter,
     this.origin,
     this.color,
+    this.description,
+    this.usageInstructions,
   });
 
   /// Calculates rate per meter for pipes
@@ -76,6 +82,8 @@ class Product extends Equatable {
     String? diameter,
     String? origin,
     String? color,
+    String? description,
+    String? usageInstructions,
   }) {
     return Product(
       id: id ?? this.id,
@@ -97,6 +105,8 @@ class Product extends Equatable {
       diameter: diameter ?? this.diameter,
       origin: origin ?? this.origin,
       color: color ?? this.color,
+      description: description ?? this.description,
+      usageInstructions: usageInstructions ?? this.usageInstructions,
     );
   }
 
@@ -121,5 +131,7 @@ class Product extends Equatable {
         diameter,
         origin,
         color,
+        description,
+        usageInstructions,
       ];
 }

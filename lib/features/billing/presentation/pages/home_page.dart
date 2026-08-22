@@ -258,6 +258,17 @@ class _HomePageState extends State<HomePage> {
                   color: AppTheme.primaryColor,
                   onPressed: _openSmartRecognition,
                 ),
+                const SizedBox(height: 16),
+                // AI Chat Overlay Button
+                _buildOverlayButton(
+                  icon: Icons.smart_toy,
+                  color: AppTheme.primaryColor,
+                  onPressed: () async {
+                    _scannerController.stop();
+                    await context.push('/ai-chat');
+                    if (_isCameraOn && mounted) _scannerController.start();
+                  },
+                ),
               ],
             ),
           ),
@@ -604,6 +615,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildSearchSection() {
+    final theme = Theme.of(context);
+    final cardColor = theme.cardTheme.color ?? theme.colorScheme.surface;
+    final borderColor = theme.dividerColor.withValues(alpha: 0.3);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: Column(
@@ -612,14 +627,15 @@ class _HomePageState extends State<HomePage> {
           // Search input
           Container(
             decoration: BoxDecoration(
-              color: Colors.grey[50],
+              color: cardColor,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey[200]!),
+              border: Border.all(color: borderColor),
             ),
             child: TextField(
               controller: _searchController,
               onChanged: _onSearchChanged,
               autofocus: true,
+              style: TextStyle(fontSize: 14, color: theme.colorScheme.onSurface),
               decoration: InputDecoration(
                 hintText: 'Search by name, brand, or barcode...',
                 hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
@@ -637,7 +653,6 @@ class _HomePageState extends State<HomePage> {
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
-              style: const TextStyle(fontSize: 14),
             ),
           ),
 
@@ -660,17 +675,22 @@ class _HomePageState extends State<HomePage> {
   }
 
   List<Widget> _buildSearchResults() {
+    final theme = Theme.of(context);
+    final cardColor = theme.cardTheme.color ?? theme.colorScheme.surface;
+    final borderColor = theme.dividerColor.withValues(alpha: 0.3);
+    final onSurfaceColor = theme.colorScheme.onSurface;
+
     return [
       const SizedBox(height: 6),
       Container(
         constraints: const BoxConstraints(maxHeight: 200),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cardColor,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey[200]!),
+          border: Border.all(color: borderColor),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -680,7 +700,7 @@ class _HomePageState extends State<HomePage> {
           shrinkWrap: true,
           padding: EdgeInsets.zero,
           itemCount: _searchResults.length,
-          separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey[100]),
+          separatorBuilder: (_, __) => Divider(height: 1, color: borderColor),
           itemBuilder: (context, index) {
             final product = _searchResults[index];
             return InkWell(
@@ -699,7 +719,7 @@ class _HomePageState extends State<HomePage> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                        color: AppTheme.primaryColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(Icons.inventory_2_outlined,
@@ -712,16 +732,17 @@ class _HomePageState extends State<HomePage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(product.name,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 13),
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 13, color: onSurfaceColor),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis),
                           Row(
                             children: [
                               Text(AppConstants.formatPrice(product.price),
                                   style: TextStyle(
-                                      color: Colors.grey[600], fontSize: 12)),
-                              if (product.brand != null) ...[                                const SizedBox(width: 6),
+                                      color: onSurfaceColor.withValues(alpha: 0.6), fontSize: 12)),
+                              if (product.brand != null) ...[
+                                const SizedBox(width: 6),
                                 Text('• ${product.brand}',
                                     style: TextStyle(
                                         color: Colors.grey[400], fontSize: 11)),
@@ -735,7 +756,7 @@ class _HomePageState extends State<HomePage> {
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: Colors.green.withValues(alpha: 0.1),
+                        color: Colors.green.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(Icons.add, size: 18, color: Colors.green),
@@ -755,7 +776,7 @@ class _HomePageState extends State<HomePage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.search, size: 48, color: Colors.grey[300]),
+          Icon(Icons.search, size: 48, color: Colors.grey[400]),
           const SizedBox(height: 12),
           const Text('Search Products',
               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
@@ -768,6 +789,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildEmptyCart() {
+    final theme = Theme.of(context);
+    final cardColor = theme.cardTheme.color ?? theme.colorScheme.surface;
+
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -776,12 +800,12 @@ class _HomePageState extends State<HomePage> {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: Colors.grey[100],
+              color: cardColor,
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
             child:
-                Icon(Icons.shopping_basket, size: 40, color: Colors.grey[300]),
+                Icon(Icons.shopping_basket, size: 40, color: Colors.grey[400]),
           ),
           const SizedBox(height: 16),
           const Text('List is empty',
@@ -804,11 +828,16 @@ class _HomePageState extends State<HomePage> {
     BuildContext context,
     CartItem item,
   ) {
+    final theme = Theme.of(context);
+    final cardColor = theme.cardTheme.color ?? theme.colorScheme.surface;
+    final borderColor = theme.dividerColor.withValues(alpha: 0.2);
+    final onSurfaceColor = theme.colorScheme.onSurface;
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
+        border: Border.all(color: borderColor),
         boxShadow: const [
           BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))
         ],
@@ -824,7 +853,7 @@ class _HomePageState extends State<HomePage> {
             height: 40,
             margin: const EdgeInsets.only(right: 10),
             decoration: BoxDecoration(
-              color: AppTheme.primaryColor.withValues(alpha: 0.08),
+              color: AppTheme.primaryColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             clipBehavior: Clip.antiAlias,
@@ -846,8 +875,8 @@ class _HomePageState extends State<HomePage> {
               children: [
                 Text(
                   item.product.name,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 14),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 14, color: onSurfaceColor),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -857,15 +886,16 @@ class _HomePageState extends State<HomePage> {
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
-                      color: Colors.grey[600]),
+                      color: onSurfaceColor.withValues(alpha: 0.6)),
                 ),
               ],
             ),
           ),
           Container(
             decoration: BoxDecoration(
-              color: Colors.grey[100],
+              color: theme.colorScheme.surface.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: borderColor),
             ),
             padding: const EdgeInsets.all(4),
             child: Row(
@@ -873,6 +903,7 @@ class _HomePageState extends State<HomePage> {
               children: [
                 _circularIconButton(
                     icon: Icons.remove,
+                    color: onSurfaceColor,
                     onPressed: () {
                       if (item.quantity > 1) {
                         context.read<BillingBloc>().add(UpdateQuantityEvent(
@@ -888,11 +919,12 @@ class _HomePageState extends State<HomePage> {
                   child: Text(
                     '${item.quantity}',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(fontWeight: FontWeight.bold, color: onSurfaceColor),
                   ),
                 ),
                 _circularIconButton(
                     icon: Icons.add,
+                    color: onSurfaceColor,
                     onPressed: () {
                       context.read<BillingBloc>().add(UpdateQuantityEvent(
                           item.product.id, item.quantity + 1));
@@ -906,17 +938,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _circularIconButton(
-      {required IconData icon, required VoidCallback onPressed}) {
+      {required IconData icon, required VoidCallback onPressed, Color? color}) {
     return InkWell(
       onTap: onPressed,
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.all(4.0),
-        child: Icon(icon, size: 20, color: Colors.grey[600]),
+        child: Icon(icon, size: 20, color: color ?? Colors.grey[600]),
       ),
     );
   }
-
-  // A floating Details/Checkout Button at the very bottom
-  // Added a Stack wrapper below to overlay this button
 }

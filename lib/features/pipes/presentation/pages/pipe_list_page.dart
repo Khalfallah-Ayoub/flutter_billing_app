@@ -7,6 +7,9 @@ import '../../../product/presentation/bloc/product_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_constants.dart';
 
+import '../../domain/entities/pipe_category.dart';
+import '../../data/services/pipe_category_service.dart';
+
 class PipeListPage extends StatefulWidget {
   const PipeListPage({super.key});
 
@@ -107,6 +110,14 @@ class _PipeListPageState extends State<PipeListPage> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.category_outlined, color: AppTheme.primaryColor),
+            tooltip: 'إدارة فئات الأنابيب',
+            onPressed: () async {
+              await context.push('/pipes/categories');
+              setState(() {});
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.content_cut, color: AppTheme.primaryColor),
             tooltip: 'قص وبيع بالمتر',
             onPressed: () => context.push('/pipe-sales'),
@@ -115,11 +126,24 @@ class _PipeListPageState extends State<PipeListPage> {
       ),
       body: BlocBuilder<ProductBloc, ProductState>(
         builder: (context, state) {
+          final categories = PipeCategoryService.getCategories();
           final allPipes = state.products.where((p) => p.isPipe).toList();
 
           // Filter by material & search query
           final filteredPipes = allPipes.where((pipe) {
-            final matchesType = _selectedMaterial == 'all' || pipe.pipeType == _selectedMaterial;
+            final pType = (pipe.pipeType ?? '').trim().toLowerCase();
+            final selType = _selectedMaterial.trim().toLowerCase();
+
+            bool matchesType = selType == 'all';
+            if (!matchesType) {
+              matchesType = pType == selType;
+              if (!matchesType) {
+                final catMatch = categories.where((c) => c.name.trim().toLowerCase() == selType || c.id.toLowerCase() == selType).firstOrNull;
+                if (catMatch != null) {
+                  matchesType = pType == catMatch.name.trim().toLowerCase() || pType == catMatch.id.toLowerCase();
+                }
+              }
+            }
             if (!matchesType) return false;
 
             if (_searchQuery.isEmpty) return true;
@@ -156,18 +180,33 @@ class _PipeListPageState extends State<PipeListPage> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Material Filter Chips
+                    // Dynamic Material Filter Chips
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: [
                           _buildFilterChip('all', 'الكل (${allPipes.length})', Icons.border_all),
                           const SizedBox(width: 8),
-                          _buildFilterChip('pvc', 'PVC (${allPipes.where((p) => p.pipeType == 'pvc').length})', Icons.square, color: Colors.blue),
-                          const SizedBox(width: 8),
-                          _buildFilterChip('copper', 'نحاس (${allPipes.where((p) => p.pipeType == 'copper').length})', Icons.circle, color: Colors.orange),
-                          const SizedBox(width: 8),
-                          _buildFilterChip('other', 'أخرى (${allPipes.where((p) => p.pipeType == 'other').length})', Icons.category, color: Colors.purple),
+                          ...categories.map((cat) {
+                            final catPipesCount = allPipes.where((p) {
+                              final pt = (p.pipeType ?? '').trim().toLowerCase();
+                              return pt == cat.name.trim().toLowerCase() || pt == cat.id.toLowerCase();
+                            }).length;
+                            Color chipColor = Colors.blue;
+                            if (cat.name.toLowerCase().contains('نحاس') || cat.name.toLowerCase().contains('copper')) {
+                              chipColor = Colors.orange;
+                            } else if (cat.name.toLowerCase().contains('ppr')) {
+                              chipColor = Colors.teal;
+                            } else if (cat.name.toLowerCase().contains('pex')) {
+                              chipColor = Colors.indigo;
+                            } else if (!cat.isSystem) {
+                              chipColor = Colors.purple;
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(left: 8.0),
+                              child: _buildFilterChip(cat.name, '${cat.name} ($catPipesCount)', Icons.architecture, color: chipColor),
+                            );
+                          }),
                         ],
                       ),
                     ),
@@ -206,7 +245,7 @@ class _PipeListPageState extends State<PipeListPage> {
   }
 
   Widget _buildFilterChip(String value, String label, IconData icon, {Color? color}) {
-    final isSelected = _selectedMaterial == value;
+    final isSelected = _selectedMaterial.trim().toLowerCase() == value.trim().toLowerCase();
     final theme = Theme.of(context);
     final activeColor = color ?? AppTheme.primaryColor;
 
@@ -237,21 +276,23 @@ class _PipeListPageState extends State<PipeListPage> {
     final theme = Theme.of(context);
     final cardColor = theme.cardTheme.color ?? theme.colorScheme.surface;
 
+    final rawType = pipe.pipeType ?? 'أنبوب';
+    String typeLabel = rawType;
     Color badgeColor;
-    String typeLabel;
-    switch (pipe.pipeType) {
-      case 'pvc':
-        badgeColor = Colors.blue;
-        typeLabel = 'PVC';
-        break;
-      case 'copper':
-        badgeColor = Colors.orange;
-        typeLabel = 'نحاس';
-        break;
-      default:
-        badgeColor = Colors.purple;
-        typeLabel = 'أخرى';
-        break;
+
+    final typeLower = rawType.toLowerCase();
+    if (typeLower == 'pvc' || typeLower.contains('pvc')) {
+      badgeColor = Colors.blue;
+      typeLabel = 'PVC';
+    } else if (typeLower == 'copper' || typeLower.contains('نحاس')) {
+      badgeColor = Colors.orange;
+      typeLabel = 'نحاس';
+    } else if (typeLower.contains('ppr')) {
+      badgeColor = Colors.teal;
+    } else if (typeLower.contains('pex')) {
+      badgeColor = Colors.indigo;
+    } else {
+      badgeColor = Colors.purple;
     }
 
     final pricePerMeter = pipe.calculatedPricePerMeter;

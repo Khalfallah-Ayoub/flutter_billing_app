@@ -363,6 +363,9 @@ class _SmartRecognitionPageState extends State<SmartRecognitionPage> {
 
   Widget _buildResultCard(
       BuildContext blocContext, RankedProduct result, bool isTopMatch) {
+    final theme = Theme.of(context);
+    final cardColor = theme.cardTheme.color ?? theme.colorScheme.surface;
+    final onSurfaceColor = theme.colorScheme.onSurface;
     final product = result.product;
     final scoreColor = result.finalScore > 0.7
         ? Colors.green
@@ -373,18 +376,18 @@ class _SmartRecognitionPageState extends State<SmartRecognitionPage> {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isTopMatch
-              ? AppTheme.primaryColor.withValues(alpha: 0.4)
-              : Colors.grey[200]!,
+              ? AppTheme.primaryColor.withValues(alpha: 0.6)
+              : theme.dividerColor.withValues(alpha: 0.2),
           width: isTopMatch ? 2 : 1,
         ),
         boxShadow: isTopMatch
             ? [
                 BoxShadow(
-                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                  color: AppTheme.primaryColor.withValues(alpha: 0.15),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 )
@@ -458,8 +461,8 @@ class _SmartRecognitionPageState extends State<SmartRecognitionPage> {
                         Expanded(
                           child: Text(
                             product.name,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w600, fontSize: 15),
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 15, color: onSurfaceColor),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -470,18 +473,18 @@ class _SmartRecognitionPageState extends State<SmartRecognitionPage> {
                       children: [
                         Text(AppConstants.formatPrice(product.price),
                             style: TextStyle(
-                                color: Colors.grey[600], fontSize: 13)),
+                                color: onSurfaceColor.withValues(alpha: 0.7), fontSize: 13)),
                         if (product.brand != null) ...[
                           const SizedBox(width: 8),
                           Text('• ${product.brand}',
                               style: TextStyle(
-                                  color: Colors.grey[500], fontSize: 12)),
+                                  color: Colors.grey[400], fontSize: 12)),
                         ],
                         if (product.size != null) ...[
                           const SizedBox(width: 8),
                           Text('• ${product.size}',
                               style: TextStyle(
-                                  color: Colors.grey[500], fontSize: 12)),
+                                  color: Colors.grey[400], fontSize: 12)),
                         ],
                       ],
                     ),

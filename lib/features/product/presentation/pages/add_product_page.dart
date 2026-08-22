@@ -28,6 +28,8 @@ class _AddProductPageState extends State<AddProductPage> {
   String _category = '';
   String _brand = '';
   String _size = '';
+  String _description = '';
+  String _usageInstructions = '';
   final List<File> _capturedImages = [];
   final ImageStorageService _imageService = ImageStorageService();
   bool _isSaving = false;
@@ -114,6 +116,8 @@ class _AddProductPageState extends State<AddProductPage> {
         category: _category.isEmpty ? null : _category,
         brand: _brand.isEmpty ? null : _brand,
         size: _size.isEmpty ? null : _size,
+        description: _description.isEmpty ? null : _description,
+        usageInstructions: _usageInstructions.isEmpty ? null : _usageInstructions,
         imagePaths: savedPaths,
       );
 
@@ -242,6 +246,28 @@ class _AddProductPageState extends State<AddProductPage> {
                     hintText: 'e.g. M8 x 30mm, 16A',
                   ),
                   onSaved: (value) => _size = value ?? '',
+                ),
+                const SizedBox(height: 24),
+
+                // --- Description (optional) ---
+                const InputLabel(text: 'وصف المنتج (اختياري - للمساعد الذكي)'),
+                TextFormField(
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    hintText: 'وصف خاص بمكونات أو خامات المنتج لتوليد اقتراحات المساعد الذكي',
+                  ),
+                  onSaved: (value) => _description = value ?? '',
+                ),
+                const SizedBox(height: 24),
+
+                // --- Usage Instructions (optional) ---
+                const InputLabel(text: 'كيفية الاستعمال والتركيب (اختياري - للمساعد الذكي)'),
+                TextFormField(
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    hintText: 'طريقة الاستعمال أو تعليمات السلامة والتركيب للمستخدم',
+                  ),
+                  onSaved: (value) => _usageInstructions = value ?? '',
                 ),
                 const SizedBox(height: 24),
 

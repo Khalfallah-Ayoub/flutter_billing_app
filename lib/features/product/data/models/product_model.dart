@@ -67,6 +67,14 @@ class ProductModel extends Product {
   @HiveField(18)
   final String? color;
 
+  @override
+  @HiveField(19)
+  final String? description;
+
+  @override
+  @HiveField(20)
+  final String? usageInstructions;
+
   const ProductModel({
     required this.id,
     required this.name,
@@ -87,6 +95,8 @@ class ProductModel extends Product {
     this.diameter,
     this.origin,
     this.color,
+    this.description,
+    this.usageInstructions,
   }) : super(
           id: id,
           name: name,
@@ -107,6 +117,8 @@ class ProductModel extends Product {
           diameter: diameter,
           origin: origin,
           color: color,
+          description: description,
+          usageInstructions: usageInstructions,
         );
 
   factory ProductModel.fromEntity(Product product) {
@@ -130,6 +142,8 @@ class ProductModel extends Product {
       diameter: product.diameter,
       origin: product.origin,
       color: product.color,
+      description: product.description,
+      usageInstructions: product.usageInstructions,
     );
   }
 
@@ -154,6 +168,8 @@ class ProductModel extends Product {
       diameter: diameter,
       origin: origin,
       color: color,
+      description: description,
+      usageInstructions: usageInstructions,
     );
   }
 
@@ -179,6 +195,8 @@ class ProductModel extends Product {
       'diameter': diameter,
       'origin': origin,
       'color': color,
+      'description': description,
+      'usageInstructions': usageInstructions,
     };
   }
 
@@ -204,6 +222,8 @@ class ProductModel extends Product {
       diameter: map['diameter'] as String?,
       origin: map['origin'] as String?,
       color: map['color'] as String?,
+      description: map['description'] as String?,
+      usageInstructions: map['usageInstructions'] as String?,
     );
   }
 }

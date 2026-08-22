@@ -117,6 +117,20 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 _buildDivider(),
                 _buildListItem(
+                  icon: Icons.category,
+                  title: 'Pipe Categories (فئات الأنابيب والمتر)',
+                  subtitle: 'إضافة وتعديل أنواع الأنابيب (PVC، نحاس، PPR...) وأطوالها الافتراضية',
+                  onTap: () => context.push('/pipes/categories'),
+                ),
+                _buildDivider(),
+                _buildListItem(
+                  icon: Icons.smart_toy,
+                  title: 'AI Shop Assistant (المساعد الذكي أوفلاين)',
+                  subtitle: 'مساعد نصي ذكي للإجابة عن الأسعار والمخزون وطرق الاستعمال (100% أوفلاين)',
+                  onTap: () => context.push('/ai-chat'),
+                ),
+                _buildDivider(),
+                _buildListItem(
                   icon: Icons.storefront,
                   title: 'Shop Details',
                   subtitle: 'Edit business info & address',
