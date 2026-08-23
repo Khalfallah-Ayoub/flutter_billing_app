@@ -269,6 +269,17 @@ class _HomePageState extends State<HomePage> {
                     if (_isCameraOn && mounted) _scannerController.start();
                   },
                 ),
+                const SizedBox(height: 16),
+                // Invoices & Debts Overlay Button
+                _buildOverlayButton(
+                  icon: Icons.receipt_long,
+                  color: Colors.amber[800],
+                  onPressed: () async {
+                    _scannerController.stop();
+                    await context.push('/invoices');
+                    if (_isCameraOn && mounted) _scannerController.start();
+                  },
+                ),
               ],
             ),
           ),

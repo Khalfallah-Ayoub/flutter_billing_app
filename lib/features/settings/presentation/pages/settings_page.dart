@@ -131,6 +131,20 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 _buildDivider(),
                 _buildListItem(
+                  icon: Icons.receipt_long,
+                  title: 'Invoices & Debt Management (إدارة الفواتير والديون)',
+                  subtitle: 'حفظ الفواتير، الديون المتبقية، تصدير PDF وواتساب',
+                  onTap: () => context.push('/invoices'),
+                ),
+                _buildDivider(),
+                _buildListItem(
+                  icon: Icons.people_alt,
+                  title: 'Customer Directory & Debts (سجل العملاء والديون)',
+                  subtitle: 'إدارة أرقام هواتف العملاء، الديون المستحقة، واتصال مباشر',
+                  onTap: () => context.push('/customers'),
+                ),
+                _buildDivider(),
+                _buildListItem(
                   icon: Icons.storefront,
                   title: 'Shop Details',
                   subtitle: 'Edit business info & address',

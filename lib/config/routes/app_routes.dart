@@ -15,6 +15,11 @@ import '../../features/pipes/presentation/pages/pipe_cutting_sale_page.dart';
 
 import '../../features/pipes/presentation/pages/pipe_categories_page.dart';
 import '../../features/ai_chat/presentation/pages/ai_chat_page.dart';
+import '../../features/invoice/presentation/pages/invoice_list_page.dart';
+import '../../features/invoice/presentation/pages/invoice_detail_page.dart';
+import '../../features/invoice/presentation/pages/create_edit_invoice_page.dart';
+import '../../features/invoice/presentation/pages/customer_list_page.dart';
+import '../../features/invoice/domain/entities/invoice.dart';
 
 final router = GoRouter(
   initialLocation: '/',
@@ -93,6 +98,30 @@ final router = GoRouter(
     GoRoute(
       path: '/ai-chat',
       builder: (context, state) => const AIChatPage(),
+    ),
+    GoRoute(
+      path: '/invoices',
+      builder: (context, state) => const InvoiceListPage(),
+      routes: [
+        GoRoute(
+          path: 'create',
+          builder: (context, state) {
+            final invoice = state.extra as Invoice?;
+            return CreateEditInvoicePage(invoice: invoice);
+          },
+        ),
+        GoRoute(
+          path: 'detail',
+          builder: (context, state) {
+            final invoice = state.extra as Invoice;
+            return InvoiceDetailPage(invoice: invoice);
+          },
+        ),
+      ],
+    ),
+    GoRoute(
+      path: '/customers',
+      builder: (context, state) => const CustomerListPage(),
     ),
   ],
 );

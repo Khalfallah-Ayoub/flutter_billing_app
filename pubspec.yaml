@@ -52,6 +52,9 @@ dependencies:
   google_mlkit_text_recognition: ^0.14.0
   share_plus: ^12.0.2
   file_picker: ^11.0.3
+  pdf: ^3.12.0
+  printing: ^5.14.3
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:
