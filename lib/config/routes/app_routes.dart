@@ -20,6 +20,12 @@ import '../../features/invoice/presentation/pages/invoice_detail_page.dart';
 import '../../features/invoice/presentation/pages/create_edit_invoice_page.dart';
 import '../../features/invoice/presentation/pages/customer_list_page.dart';
 import '../../features/invoice/domain/entities/invoice.dart';
+import '../../features/expense/presentation/pages/expense_list_page.dart';
+import '../../features/analytics/presentation/pages/profit_analytics_page.dart';
+import '../../features/analytics/presentation/pages/financial_hub_page.dart';
+import '../../features/product/presentation/pages/category_colors_page.dart';
+import '../../features/specialty/presentation/pages/electrical_products_page.dart';
+import '../../features/specialty/presentation/pages/paint_products_page.dart';
 
 final router = GoRouter(
   initialLocation: '/',
@@ -122,6 +128,30 @@ final router = GoRouter(
     GoRoute(
       path: '/customers',
       builder: (context, state) => const CustomerListPage(),
+    ),
+    GoRoute(
+      path: '/expenses',
+      builder: (context, state) => const ExpenseListPage(),
+    ),
+    GoRoute(
+      path: '/profit-analytics',
+      builder: (context, state) => const ProfitAnalyticsPage(),
+    ),
+    GoRoute(
+      path: '/financial-hub',
+      builder: (context, state) => const FinancialHubPage(),
+    ),
+    GoRoute(
+      path: '/category-colors',
+      builder: (context, state) => const CategoryColorsPage(),
+    ),
+    GoRoute(
+      path: '/electrical-products',
+      builder: (context, state) => const ElectricalProductsPage(),
+    ),
+    GoRoute(
+      path: '/paint-products',
+      builder: (context, state) => const PaintProductsPage(),
     ),
   ],
 );

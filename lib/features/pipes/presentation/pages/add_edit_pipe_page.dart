@@ -29,6 +29,7 @@ class _AddEditPipePageState extends State<AddEditPipePage> {
   final TextEditingController _diameterController = TextEditingController();
   final TextEditingController _lengthController = TextEditingController(text: '6.0');
   final TextEditingController _fullPriceController = TextEditingController();
+  final TextEditingController _costPriceController = TextEditingController();
   final TextEditingController _stockController = TextEditingController(text: '10');
   final TextEditingController _originController = TextEditingController(text: 'الجزائر');
   final TextEditingController _colorController = TextEditingController(text: 'أبيض');
@@ -49,6 +50,7 @@ class _AddEditPipePageState extends State<AddEditPipePage> {
       _diameterController.text = p.diameter ?? p.size ?? '';
       _lengthController.text = (p.fullLength ?? _getDefaultLength(_pipeType)).toString();
       _fullPriceController.text = (p.fullPrice ?? p.price).toString();
+      _costPriceController.text = p.costPrice > 0 ? p.costPrice.toString() : '';
       _stockController.text = p.stock.toString();
       _originController.text = p.origin ?? 'الجزائر';
       _colorController.text = p.color ?? 'أبيض';
@@ -71,6 +73,7 @@ class _AddEditPipePageState extends State<AddEditPipePage> {
     _diameterController.dispose();
     _lengthController.dispose();
     _fullPriceController.dispose();
+    _costPriceController.dispose();
     _stockController.dispose();
     _originController.dispose();
     _colorController.dispose();
@@ -129,6 +132,7 @@ class _AddEditPipePageState extends State<AddEditPipePage> {
       final color = _colorController.text.trim();
       final description = _descController.text.trim();
       final usage = _usageController.text.trim();
+      final costPrice = double.tryParse(_costPriceController.text.trim()) ?? 0.0;
       final pricePerMeter = fullLength > 0 ? (fullPrice / fullLength) : fullPrice;
 
       final pipeProduct = Product(
@@ -136,6 +140,7 @@ class _AddEditPipePageState extends State<AddEditPipePage> {
         name: name,
         barcode: isEditing ? widget.pipe!.barcode : 'PIPE-${DateTime.now().millisecondsSinceEpoch}',
         price: pricePerMeter, // Store price per meter in standard price field for catalog compatibility
+        costPrice: costPrice, // Total cost for the full pipe
         stock: stock,
         isPipe: true,
         pipeType: _pipeType,
@@ -413,18 +418,43 @@ class _AddEditPipePageState extends State<AddEditPipePage> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Stock Count Input
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    // Cost Price & Stock Row
+                    Row(
                       children: [
-                        Text('الكمية المتوفرة (عدد الأنابيب الكاملة):', style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface)),
-                        const SizedBox(height: 6),
-                        TextFormField(
-                          controller: _stockController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            hintText: 'مثلاً: 10 أنابيب',
-                            prefixIcon: Icon(Icons.inventory_2_outlined),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('سعر شراء الأنبوب (التكلفة):', style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface)),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _costPriceController,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                decoration: const InputDecoration(
+                                  hintText: '0.00',
+                                  suffixText: AppConstants.currencySymbol,
+                                  prefixIcon: Icon(Icons.price_change_outlined),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('الكمية المتوفرة:', style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface)),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _stockController,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  hintText: '10 أنابيب',
+                                  prefixIcon: Icon(Icons.inventory_2_outlined),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],

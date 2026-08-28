@@ -24,6 +24,7 @@ class _EditProductPageState extends State<EditProductPage> {
   final _formKey = GlobalKey<FormState>();
   late String _name;
   late double _price;
+  late double _costPrice;
   late String _category;
   late String _brand;
   late String _size;
@@ -39,6 +40,7 @@ class _EditProductPageState extends State<EditProductPage> {
     super.initState();
     _name = widget.product.name;
     _price = widget.product.price;
+    _costPrice = widget.product.costPrice;
     _category = widget.product.category ?? '';
     _brand = widget.product.brand ?? '';
     _size = widget.product.size ?? '';
@@ -110,6 +112,7 @@ class _EditProductPageState extends State<EditProductPage> {
       final updatedProduct = widget.product.copyWith(
         name: _name,
         price: _price,
+        costPrice: _costPrice,
         category: _category.isEmpty ? null : _category,
         brand: _brand.isEmpty ? null : _brand,
         size: _size.isEmpty ? null : _size,
@@ -193,21 +196,45 @@ class _EditProductPageState extends State<EditProductPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // --- Price ---
-                const InputLabel(text: 'Price'),
-                TextFormField(
-                  initialValue: _price.toStringAsFixed(2),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    suffixText: ' د.ج',
-                    prefixStyle: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black),
-                  ),
-                  validator: AppValidators.price,
-                  onSaved: (value) => _price = double.parse(value!),
+                // --- Price & Cost Price ---
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const InputLabel(text: 'سعر البيع *'),
+                          TextFormField(
+                            initialValue: _price.toStringAsFixed(2),
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(
+                              suffixText: ' د.ج',
+                            ),
+                            validator: AppValidators.price,
+                            onSaved: (value) => _price = double.parse(value!),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const InputLabel(text: 'سعر التكلفة / الشراء'),
+                          TextFormField(
+                            initialValue: _costPrice > 0 ? _costPrice.toStringAsFixed(2) : '',
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(
+                              hintText: '0.00',
+                              suffixText: ' د.ج',
+                            ),
+                            onSaved: (value) => _costPrice = double.tryParse(value ?? '') ?? 0.0,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 24),
 

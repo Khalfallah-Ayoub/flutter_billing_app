@@ -5,6 +5,7 @@ import '../../features/invoice/data/models/customer_model.dart';
 import '../../features/invoice/data/models/invoice_item_model.dart';
 import '../../features/invoice/data/models/invoice_model.dart';
 import '../../features/invoice/data/models/payment_record_model.dart';
+import '../../features/expense/data/models/expense_model.dart';
 
 class HiveDatabase {
   static const String productBoxName = 'products';
@@ -13,6 +14,7 @@ class HiveDatabase {
   static const String feedbackBoxName = 'feedback';
   static const String customerBoxName = 'customers';
   static const String invoiceBoxName = 'invoices';
+  static const String expenseBoxName = 'expenses';
 
   static Future<void> init() async {
     await Hive.initFlutter();
@@ -24,6 +26,7 @@ class HiveDatabase {
     Hive.registerAdapter(InvoiceItemModelAdapter());
     Hive.registerAdapter(InvoiceModelAdapter());
     Hive.registerAdapter(PaymentRecordModelAdapter());
+    Hive.registerAdapter(ExpenseModelAdapter());
 
     // Open Boxes
     await Hive.openBox<ProductModel>(productBoxName);
@@ -32,6 +35,7 @@ class HiveDatabase {
     await Hive.openBox(feedbackBoxName); // Generic box for recognition feedback records
     await Hive.openBox<CustomerModel>(customerBoxName);
     await Hive.openBox<InvoiceModel>(invoiceBoxName);
+    await Hive.openBox<ExpenseModel>(expenseBoxName);
   }
 
   static Box<ProductModel> get productBox =>
@@ -43,4 +47,6 @@ class HiveDatabase {
       Hive.box<CustomerModel>(customerBoxName);
   static Box<InvoiceModel> get invoiceBox =>
       Hive.box<InvoiceModel>(invoiceBoxName);
+  static Box<ExpenseModel> get expenseBox =>
+      Hive.box<ExpenseModel>(expenseBoxName);
 }

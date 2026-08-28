@@ -60,7 +60,17 @@ class _ScannerPageState extends State<ScannerPage> {
           MobileScanner(
             controller: controller,
             onDetect: _onDetect,
-            // Removed overlay property
+            errorBuilder: (context, error, child) {
+              return Container(
+                color: Colors.black,
+                child: const Center(
+                  child: Text(
+                    'الكاميرا غير متوفرة على هذا الجهاز',
+                    style: TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                ),
+              );
+            },
           ),
           // Simple border overlay manually
           Container(

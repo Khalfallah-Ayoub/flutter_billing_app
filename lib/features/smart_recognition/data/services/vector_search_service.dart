@@ -2,7 +2,6 @@ import 'dart:math';
 import '../../domain/entities/similarity_result.dart';
 import '../../../product/domain/entities/product.dart';
 import '../../../../core/data/hive_database.dart';
-import '../../../product/data/models/product_model.dart';
 
 /// Local brute-force vector search using cosine similarity.
 /// Sufficient for ≤1000 products — takes <20ms on any modern phone.

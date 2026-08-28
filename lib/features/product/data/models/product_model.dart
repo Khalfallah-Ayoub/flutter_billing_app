@@ -75,11 +75,16 @@ class ProductModel extends Product {
   @HiveField(20)
   final String? usageInstructions;
 
+  @override
+  @HiveField(21)
+  final double costPrice;
+
   const ProductModel({
     required this.id,
     required this.name,
     required this.barcode,
     required this.price,
+    this.costPrice = 0.0,
     required this.stock,
     this.sku,
     this.category,
@@ -102,6 +107,7 @@ class ProductModel extends Product {
           name: name,
           barcode: barcode,
           price: price,
+          costPrice: costPrice,
           stock: stock,
           sku: sku,
           category: category,
@@ -127,6 +133,7 @@ class ProductModel extends Product {
       name: product.name,
       barcode: product.barcode,
       price: product.price,
+      costPrice: product.costPrice,
       stock: product.stock,
       sku: product.sku,
       category: product.category,
@@ -153,6 +160,7 @@ class ProductModel extends Product {
       name: name,
       barcode: barcode,
       price: price,
+      costPrice: costPrice,
       stock: stock,
       sku: sku,
       category: category,
@@ -180,6 +188,7 @@ class ProductModel extends Product {
       'name': name,
       'barcode': barcode,
       'price': price,
+      'costPrice': costPrice,
       'stock': stock,
       'sku': sku,
       'category': category,
@@ -207,6 +216,7 @@ class ProductModel extends Product {
       name: map['name'] as String? ?? '',
       barcode: map['barcode'] as String? ?? '',
       price: (map['price'] as num?)?.toDouble() ?? 0.0,
+      costPrice: (map['costPrice'] as num?)?.toDouble() ?? 0.0,
       stock: (map['stock'] as num?)?.toInt() ?? 0,
       sku: map['sku'] as String?,
       category: map['category'] as String?,

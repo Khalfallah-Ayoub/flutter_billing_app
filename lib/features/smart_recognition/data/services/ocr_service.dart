@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import '../../domain/entities/ocr_result.dart';
@@ -32,11 +31,6 @@ class OcrService {
   /// Matches dimension patterns: 8x30, 10 x 40, M8x30
   static final RegExp _dimensionPattern = RegExp(
     r'(\d+)\s*[xX×]\s*(\d+)',
-  );
-
-  /// Matches standalone numbers (integers and decimals)
-  static final RegExp _numberPattern = RegExp(
-    r'\b(\d+(?:\.\d+)?)\b',
   );
 
   /// Matches grade/class patterns: 8.8, 10.9, A2, A4

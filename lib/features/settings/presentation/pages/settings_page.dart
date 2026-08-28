@@ -21,7 +21,6 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
-    // Re-initialize printer state whenever settings page opens
     context.read<PrinterBloc>().add(InitPrinterEvent());
   }
 
@@ -124,6 +123,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 _buildDivider(),
                 _buildListItem(
+                  icon: Icons.palette,
+                  title: 'ألوان الفئات (Category Colors)',
+                  subtitle: 'تخصيص ألوان الفئات لتمييز المنتجات في شاشة البيع',
+                  onTap: () => context.push('/category-colors'),
+                ),
+                _buildDivider(),
+                _buildListItem(
                   icon: Icons.smart_toy,
                   title: 'AI Shop Assistant (المساعد الذكي أوفلاين)',
                   subtitle: 'مساعد نصي ذكي للإجابة عن الأسعار والمخزون وطرق الاستعمال (100% أوفلاين)',
@@ -149,6 +155,30 @@ class _SettingsPageState extends State<SettingsPage> {
                   title: 'Shop Details',
                   subtitle: 'Edit business info & address',
                   onTap: () => context.push('/shop'),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 24),
+
+            // Specialty Products Section
+            _buildSectionHeader('منتجات متخصصة'),
+            _buildListGroup(
+              children: [
+                _buildListItem(
+                  icon: Icons.electrical_services,
+                  iconColor: Colors.orange.shade700,
+                  title: 'منتجات الكهرباء ⚡',
+                  subtitle: 'كابلات، قواطع، مفاتيح، لمبات — عرض وبيع سريع',
+                  onTap: () => context.push('/electrical-products'),
+                ),
+                _buildDivider(),
+                _buildListItem(
+                  icon: Icons.format_paint,
+                  iconColor: Colors.green.shade700,
+                  title: 'منتجات الطلاء 🎨',
+                  subtitle: 'أصباغ، معجون، طلاء خشب ومعادن — عرض وبيع سريع',
+                  onTap: () => context.push('/paint-products'),
                 ),
               ],
             ),
@@ -339,6 +369,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildListItem({
     required IconData icon,
+    Color? iconColor,
     required String title,
     String? subtitle,
     Widget? subtitleWidget,
@@ -346,6 +377,7 @@ class _SettingsPageState extends State<SettingsPage> {
     IconData? trailingIcon = Icons.chevron_right,
     VoidCallback? onTap,
   }) {
+    final effectiveIconColor = iconColor ?? AppTheme.primaryColor;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -357,10 +389,10 @@ class _SettingsPageState extends State<SettingsPage> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                color: effectiveIconColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(icon, color: AppTheme.primaryColor, size: 20),
+              child: Icon(icon, color: effectiveIconColor, size: 20),
             ),
             const SizedBox(width: 16),
             Expanded(

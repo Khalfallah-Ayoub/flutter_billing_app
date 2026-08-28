@@ -72,11 +72,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
     // Map cart items to InvoiceItems
     final invoiceItems = billingState.cartItems.map((cartItem) {
       final p = cartItem.product;
+      final unitCost = (p.isPipe && p.fullLength != null && p.fullLength! > 0)
+          ? (p.costPrice > 0 ? p.costPrice / p.fullLength! : 0.0)
+          : p.costPrice;
       return InvoiceItem(
         productId: p.id,
         productName: p.name,
         barcode: p.barcode,
         unitPrice: p.price,
+        costPrice: unitCost,
         quantity: cartItem.quantity.toDouble(),
         unit: p.isPipe ? 'متر' : 'قطعة',
         subtotal: cartItem.total,

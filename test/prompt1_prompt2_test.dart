@@ -95,7 +95,7 @@ void main() {
       );
 
       // props should include all fields
-      expect(product.props, hasLength(21));
+      expect(product.props, hasLength(22));
     });
 
     test('two Products with same fields should be equal', () {

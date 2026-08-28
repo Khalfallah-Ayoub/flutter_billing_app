@@ -25,6 +25,7 @@ class _AddProductPageState extends State<AddProductPage> {
   String _name = '';
   String _barcode = '';
   double _price = 0.0;
+  double _costPrice = 0.0;
   String _category = '';
   String _brand = '';
   String _size = '';
@@ -113,6 +114,7 @@ class _AddProductPageState extends State<AddProductPage> {
         name: _name,
         barcode: _barcode,
         price: _price,
+        costPrice: _costPrice,
         category: _category.isEmpty ? null : _category,
         brand: _brand.isEmpty ? null : _brand,
         size: _size.isEmpty ? null : _size,
@@ -200,20 +202,43 @@ class _AddProductPageState extends State<AddProductPage> {
                 const SizedBox(height: 24),
 
                 // --- Price ---
-                const InputLabel(text: 'Price'),
-                TextFormField(
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    hintText: '0.00',
-                    suffixText: ' د.ج',
-                    prefixStyle: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black),
-                  ),
-                  validator: AppValidators.price,
-                  onSaved: (value) => _price = double.parse(value!),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const InputLabel(text: 'سعر البيع *'),
+                          TextFormField(
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(
+                              hintText: '0.00',
+                              suffixText: ' د.ج',
+                            ),
+                            validator: AppValidators.price,
+                            onSaved: (value) => _price = double.parse(value!),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const InputLabel(text: 'سعر التكلفة / الشراء'),
+                          TextFormField(
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(
+                              hintText: '0.00',
+                              suffixText: ' د.ج',
+                            ),
+                            onSaved: (value) => _costPrice = double.tryParse(value ?? '') ?? 0.0,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 24),
 

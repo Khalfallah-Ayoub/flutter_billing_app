@@ -7,10 +7,11 @@ import '../../../product/presentation/bloc/product_bloc.dart';
 import '../../../billing/presentation/bloc/billing_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_constants.dart';
+import '../../data/services/pipe_category_service.dart';
+import '../../domain/entities/pipe_category.dart';
 
 class PipeCuttingSalePage extends StatefulWidget {
   final Product? initialPipe;
-
   const PipeCuttingSalePage({super.key, this.initialPipe});
 
   @override
@@ -19,85 +20,116 @@ class PipeCuttingSalePage extends StatefulWidget {
 
 class _PipeCuttingSalePageState extends State<PipeCuttingSalePage> {
   Product? _selectedPipe;
-  final TextEditingController _metersController = TextEditingController(text: '1.0');
-  String _selectedMaterialFilter = 'all';
-
   double _requestedMeters = 1.0;
+  int _pipeQuantity = 1; // Number of full pipes to sell
+  bool _isPerMeterMode = true; // true = per meter, false = full pipe(s)
+  String? _selectedCategoryFilter;
+
+  final List<double> _presets = [0.25, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0];
 
   @override
   void initState() {
     super.initState();
     _selectedPipe = widget.initialPipe;
-    _metersController.addListener(_updateMeters);
-  }
-
-  @override
-  void dispose() {
-    _metersController.removeListener(_updateMeters);
-    _metersController.dispose();
-    super.dispose();
-  }
-
-  void _updateMeters() {
-    final val = double.tryParse(_metersController.text.trim());
-    setState(() {
-      _requestedMeters = (val != null && val > 0) ? val : 0.0;
-    });
-  }
-
-  void _setPresetMeters(double meters) {
-    _metersController.text = meters.toString();
-    setState(() {
-      _requestedMeters = meters;
-    });
   }
 
   double get _calculatedTotal {
-    if (_selectedPipe == null || _requestedMeters <= 0) return 0.0;
-    return _requestedMeters * _selectedPipe!.calculatedPricePerMeter;
+    if (_selectedPipe == null) return 0.0;
+    if (_isPerMeterMode) {
+      if (_requestedMeters <= 0) return 0.0;
+      return _requestedMeters * _selectedPipe!.calculatedPricePerMeter;
+    } else {
+      // Full pipe(s) mode
+      return _pipeQuantity * (_selectedPipe!.fullPrice ?? _selectedPipe!.price);
+    }
   }
 
+  void _adjustMeters(double delta) {
+    setState(() {
+      _requestedMeters = (_requestedMeters + delta).clamp(0.25, 100.0);
+      // Round to 2 decimal places
+      _requestedMeters = double.parse(_requestedMeters.toStringAsFixed(2));
+    });
+  }
+
+  void _setPreset(double meters) => setState(() => _requestedMeters = meters);
+
   void _addToCart() {
-    if (_selectedPipe == null || _requestedMeters <= 0) return;
-
+    if (_selectedPipe == null) return;
     final pipe = _selectedPipe!;
-    final totalAmount = _calculatedTotal;
 
-    // Format cut item name e.g. "أنبوب PVC Ø110 (1.5 متر)"
-    final cutItemName = '${pipe.name.split('(').first.trim()} (${_requestedMeters.toStringAsFixed(_requestedMeters.truncateToDouble() == _requestedMeters ? 0 : 2)} متر)';
+    if (_isPerMeterMode) {
+      if (_requestedMeters <= 0) return;
+      final total = _calculatedTotal;
+      final metersStr = _requestedMeters == _requestedMeters.truncateToDouble()
+          ? _requestedMeters.toInt().toString()
+          : _requestedMeters.toStringAsFixed(2);
+      final cutName = '${pipe.name.split('(').first.trim()} ($metersStr م)';
 
-    final cutProduct = Product(
-      id: 'CUT-${pipe.id}-${DateTime.now().millisecondsSinceEpoch}',
-      name: cutItemName,
-      barcode: pipe.barcode,
-      price: totalAmount, // Exact total calculated price
-      stock: pipe.stock,
-      category: pipe.category,
-      size: pipe.size,
-      brand: pipe.brand,
-      isPipe: true,
-      pipeType: pipe.pipeType,
-      fullLength: pipe.fullLength,
-      fullPrice: pipe.fullPrice,
-      diameter: pipe.diameter,
-      origin: pipe.origin,
-      color: pipe.color,
-    );
+      final cutProduct = Product(
+        id: 'CUT-${pipe.id}-${DateTime.now().millisecondsSinceEpoch}',
+        name: cutName,
+        barcode: pipe.barcode,
+        price: total,
+        stock: pipe.stock,
+        category: pipe.category,
+        size: pipe.size,
+        brand: pipe.brand,
+        isPipe: true,
+        pipeType: pipe.pipeType,
+        fullLength: pipe.fullLength,
+        fullPrice: pipe.fullPrice,
+        diameter: pipe.diameter,
+        origin: pipe.origin,
+        color: pipe.color,
+      );
+      context.read<BillingBloc>().add(AddProductToCartEvent(cutProduct));
+      _showSuccessSnack(cutName, total);
+    } else {
+      // Full pipe(s) mode — add as regular product with quantity
+      if (_pipeQuantity <= 0) return;
+      final unitPrice = pipe.fullPrice ?? pipe.price;
+      final total = unitPrice * _pipeQuantity;
+      final pipeName = pipe.name.split('(').first.trim();
 
-    context.read<BillingBloc>().add(AddProductToCartEvent(cutProduct));
+      for (int i = 0; i < _pipeQuantity; i++) {
+        final p = Product(
+          id: 'PIPE-${pipe.id}-${DateTime.now().millisecondsSinceEpoch}-$i',
+          name: pipeName,
+          barcode: pipe.barcode,
+          price: unitPrice,
+          stock: pipe.stock,
+          category: pipe.category,
+          size: pipe.size,
+          brand: pipe.brand,
+          isPipe: true,
+          pipeType: pipe.pipeType,
+          fullLength: pipe.fullLength,
+          fullPrice: pipe.fullPrice,
+          diameter: pipe.diameter,
+          origin: pipe.origin,
+          color: pipe.color,
+        );
+        context.read<BillingBloc>().add(AddProductToCartEvent(p));
+      }
+      _showSuccessSnack('$_pipeQuantity × $pipeName', total);
+    }
+  }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('✅ تمت إضافة "$cutItemName" إلى الفاتورة بمبلغ ${AppConstants.formatPrice(totalAmount)}'),
-        backgroundColor: Colors.green[700],
-        behavior: SnackBarBehavior.floating,
-        action: SnackBarAction(
-          label: 'عرض الفاتورة',
-          textColor: Colors.white,
-          onPressed: () => context.pop(),
-        ),
-      ),
-    );
+  void _showSuccessSnack(String name, double total) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Row(children: [
+        const Icon(Icons.check_circle, color: Colors.white, size: 18),
+        const SizedBox(width: 8),
+        Expanded(child: Text('$name — ${AppConstants.formatPrice(total)}',
+            style: const TextStyle(fontWeight: FontWeight.bold))),
+      ]),
+      backgroundColor: Colors.green.shade700,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 2),
+      margin: const EdgeInsets.only(bottom: 12, left: 12, right: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
   }
 
   @override
@@ -107,314 +139,335 @@ class _PipeCuttingSalePageState extends State<PipeCuttingSalePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'حاسبة بيع الأنابيب بالمتر',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('قطع وبيع الأنابيب ✂️',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         leading: IconButton(
           icon: Icon(Icons.chevron_left, size: 28, color: theme.primaryColor),
           onPressed: () => context.pop(),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline),
+            tooltip: 'إضافة أنبوب',
+            onPressed: () => context.push('/pipes/add'),
+          ),
+        ],
       ),
       body: BlocBuilder<ProductBloc, ProductState>(
         builder: (context, state) {
-          final pipes = state.products.where((p) => p.isPipe).toList();
+          final allPipes = state.products.where((p) => p.isPipe).toList();
+          final categories = PipeCategoryService.getCategories();
 
-          if (_selectedPipe == null && pipes.isNotEmpty) {
-            _selectedPipe = pipes.first;
+          // Filter by category
+          final pipes = _selectedCategoryFilter == null
+              ? allPipes
+              : allPipes.where((p) {
+                  final pt = (p.pipeType ?? '').toLowerCase();
+                  final sel = _selectedCategoryFilter!.toLowerCase();
+                  return pt == sel || pt.contains(sel) || sel.contains(pt);
+                }).toList();
+
+          // Auto-select first pipe when filter changes
+          if (pipes.isNotEmpty &&
+              (_selectedPipe == null || !pipes.contains(_selectedPipe))) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) setState(() => _selectedPipe = pipes.first);
+            });
           }
 
-          final filteredPipes = pipes.where((p) {
-            if (_selectedMaterialFilter == 'all') return true;
-            return p.pipeType == _selectedMaterialFilter;
-          }).toList();
+          return Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // ── Mode Toggle ──────────────────────────────────
+                      _buildSectionTitle('وضع البيع'),
+                      const SizedBox(height: 8),
+                      _buildModeToggle(),
+                      const SizedBox(height: 14),
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Section 1: Pipe Selection Dropdown & Filter
-                Text(
-                  'اختر الأنبوب المراد قطعه وبيعه:',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+                      // ── Category Filter Chips ──────────────────────
+                      _buildSectionTitle('نوع المادة'),
+                      const SizedBox(height: 8),
+                      _buildCategoryChips(categories),
+                      const SizedBox(height: 14),
+
+                      // ── Pipe Selection Cards ───────────────────────
+                      _buildSectionTitle('اختر الأنبوب'),
+                      const SizedBox(height: 8),
+                      pipes.isEmpty
+                          ? _buildNoPipesWarning()
+                          : _buildPipeCards(pipes, cardColor),
+                      const SizedBox(height: 14),
+
+                      // ── Selected Pipe Info ─────────────────────────
+                      if (_selectedPipe != null) ...[
+                        _buildPipeInfoCard(_selectedPipe!, cardColor, theme),
+                        const SizedBox(height: 14),
+                      ],
+
+                      // ── Per-Meter or Full-Pipe Input ───────────────
+                      if (_isPerMeterMode) ...[
+                        _buildSectionTitle('الطول المطلوب بالمتر'),
+                        const SizedBox(height: 8),
+                        _buildMetersInput(theme),
+                        const SizedBox(height: 10),
+                        _buildPresetButtons(),
+                      ] else ...[
+                        _buildSectionTitle('عدد الأنابيب الكاملة'),
+                        const SizedBox(height: 8),
+                        _buildQuantitySelector(theme),
+                        const SizedBox(height: 4),
+                        if (_selectedPipe != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              'سعر أنبوب كامل: ${AppConstants.formatPrice(_selectedPipe!.fullPrice ?? _selectedPipe!.price)}',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                            ),
+                          ),
+                      ],
+                      const SizedBox(height: 14),
+
+                      // ── Total Card ─────────────────────────────────
+                      if (_selectedPipe != null)
+                        _buildTotalCard(),
+
+                      const SizedBox(height: 80),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 8),
+              ),
 
-                // Material Filters
-                Row(
+              // ── Bottom Add Button ──────────────────────────────────
+              if (_selectedPipe != null)
+                _buildAddButton(),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ── Widgets ──────────────────────────────────────────────────────────────
+
+  Widget _buildModeToggle() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _isPerMeterMode = true),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: _isPerMeterMode ? AppTheme.primaryColor : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildFilterChip('all', 'الكل'),
+                    Icon(Icons.straighten,
+                        size: 18,
+                        color: _isPerMeterMode ? Colors.white : Colors.grey),
                     const SizedBox(width: 6),
-                    _buildFilterChip('pvc', 'PVC', color: Colors.blue),
-                    const SizedBox(width: 6),
-                    _buildFilterChip('copper', 'نحاس', color: Colors.orange),
-                    const SizedBox(width: 6),
-                    _buildFilterChip('other', 'أخرى', color: Colors.purple),
+                    Text(
+                      'قطع بالمتر',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: _isPerMeterMode ? Colors.white : Colors.grey,
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 12),
-
-                // Pipe Dropdown / Selector
-                if (filteredPipes.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.amber),
-                    ),
-                    child: const Text(
-                      'لا توجد أنابيب من هذا النوع. يرجى إضافة أنبوب أولاً من صفحة إدارة الأنابيب.',
-                      style: TextStyle(color: Colors.amber),
-                    ),
-                  )
-                else
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: cardColor,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: theme.primaryColor.withValues(alpha: 0.3)),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<Product>(
-                        value: filteredPipes.contains(_selectedPipe) ? _selectedPipe : filteredPipes.first,
-                        isExpanded: true,
-                        icon: const Icon(Icons.arrow_drop_down_circle, color: AppTheme.primaryColor),
-                        items: filteredPipes.map((pipe) {
-                          return DropdownMenuItem<Product>(
-                            value: pipe,
-                            child: Row(
-                              children: [
-                                Icon(
-                                  pipe.pipeType == 'copper'
-                                      ? Icons.circle
-                                      : pipe.pipeType == 'pvc'
-                                          ? Icons.square
-                                          : Icons.category,
-                                  size: 16,
-                                  color: pipe.pipeType == 'copper'
-                                      ? Colors.orange
-                                      : pipe.pipeType == 'pvc'
-                                          ? Colors.blue
-                                          : Colors.purple,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    pipe.name,
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                Text(
-                                  '${AppConstants.formatPrice(pipe.calculatedPricePerMeter)}/متر',
-                                  style: const TextStyle(fontSize: 12, color: AppTheme.primaryColor, fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (newPipe) {
-                          setState(() {
-                            _selectedPipe = newPipe;
-                          });
-                        },
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _isPerMeterMode = false),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: !_isPerMeterMode ? AppTheme.primaryColor : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.inventory_2,
+                        size: 18,
+                        color: !_isPerMeterMode ? Colors.white : Colors.grey),
+                    const SizedBox(width: 6),
+                    Text(
+                      'أنابيب كاملة',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: !_isPerMeterMode ? Colors.white : Colors.grey,
                       ),
                     ),
-                  ),
-                const SizedBox(height: 20),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-                // Section 2: Selected Pipe Rate Details Card
-                if (_selectedPipe != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: cardColor,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'الطول الكامل للأنبوب الأصلي:',
-                              style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
-                            ),
-                            Text(
-                              '${_selectedPipe!.fullLength ?? 6.0} متر',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'سعر الأنبوب الكامل:',
-                              style: TextStyle(color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
-                            ),
-                            Text(
-                              AppConstants.formatPrice(_selectedPipe!.fullPrice ?? _selectedPipe!.price),
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                        const Divider(height: 20),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Row(
-                              children: [
-                                Icon(Icons.flash_on, color: AppTheme.primaryColor, size: 18),
-                                SizedBox(width: 4),
-                                Text(
-                                  'معدل سعر المتر الواحد:',
-                                  style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryColor),
-                                ),
-                              ],
-                            ),
-                            Text(
-                              '${AppConstants.formatPrice(_selectedPipe!.calculatedPricePerMeter)} / متر',
-                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppTheme.primaryColor),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
+  Widget _buildQuantitySelector(ThemeData theme) {
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardTheme.color ?? theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          _StepButton(
+            icon: Icons.remove,
+            color: Colors.red.shade400,
+            onTap: () => setState(() => _pipeQuantity = (_pipeQuantity - 1).clamp(1, 99)),
+            onLongPress: () => setState(() => _pipeQuantity = (_pipeQuantity - 5).clamp(1, 99)),
+          ),
+          Expanded(
+            child: Column(
+              children: [
+                Text(
+                  '$_pipeQuantity',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 36,
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.primaryColor),
+                ),
+                Text('أنبوب', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+              ],
+            ),
+          ),
+          _StepButton(
+            icon: Icons.add,
+            color: Colors.green.shade600,
+            onTap: () => setState(() => _pipeQuantity = (_pipeQuantity + 1).clamp(1, 99)),
+            onLongPress: () => setState(() => _pipeQuantity = (_pipeQuantity + 5).clamp(1, 99)),
+          ),
+        ],
+      ),
+    );
+  }
 
-                  // Section 3: Length Input & Presets
+  Widget _buildSectionTitle(String title) => Padding(
+    padding: const EdgeInsets.only(bottom: 2),
+    child: Text(
+      title,
+      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+    ),
+  );
+
+  Widget _buildCategoryChips(List<PipeCategory> categories) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      children: [
+        _CategoryChip(
+          label: 'الكل',
+          selected: _selectedCategoryFilter == null,
+          color: AppTheme.primaryColor,
+          onTap: () => setState(() => _selectedCategoryFilter = null),
+        ),
+        ...categories.map((cat) {
+          final color = _categoryColor(cat.id);
+          return _CategoryChip(
+            label: cat.name,
+            selected: _selectedCategoryFilter == cat.id,
+            color: color,
+            subtitle: '${cat.defaultLength}م',
+            onTap: () => setState(() => _selectedCategoryFilter =
+                _selectedCategoryFilter == cat.id ? null : cat.id),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildPipeCards(List<Product> pipes, Color cardColor) {
+    return SizedBox(
+      height: 100,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: pipes.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final pipe = pipes[i];
+          final isSelected = _selectedPipe?.id == pipe.id;
+          final color = _categoryColor(pipe.pipeType ?? '');
+          return GestureDetector(
+            onTap: () => setState(() => _selectedPipe = pipe),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 130,
+              decoration: BoxDecoration(
+                color: isSelected ? color.withValues(alpha: 0.12) : cardColor,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isSelected ? color : color.withValues(alpha: 0.25),
+                  width: isSelected ? 2.5 : 1,
+                ),
+                boxShadow: isSelected
+                    ? [BoxShadow(color: color.withValues(alpha: 0.2), blurRadius: 8)]
+                    : null,
+              ),
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        pipe.pipeType?.toUpperCase() ?? '—',
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: color),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 4),
                   Text(
-                    'الطول المطلـوب قطعه بالمتر (Meters requested):',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+                    pipe.name.split('(').first.trim(),
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 8),
-
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _metersController,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                          decoration: InputDecoration(
-                            suffixText: 'متر',
-                            prefixIcon: const Icon(Icons.straighten, color: AppTheme.primaryColor),
-                            hintText: '0.0',
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Preset Meter Buttons (e.g. 0.5m, 1m, 1.5m, 2.75m, full length)
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _buildPresetChip(0.5, '0.5 متر'),
-                      _buildPresetChip(1.0, '1 متر'),
-                      _buildPresetChip(1.5, '1.5 متر'),
-                      _buildPresetChip(2.0, '2 متر'),
-                      _buildPresetChip(2.5, '2.5 متر'),
-                      _buildPresetChip(2.75, '2.75 متر'),
-                      if (_selectedPipe != null && _selectedPipe!.fullLength != null)
-                        _buildPresetChip(_selectedPipe!.fullLength!, 'أنبوب كامل (${_selectedPipe!.fullLength}م)', isFull: true),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Section 4: Live Dynamic Calculation Result Card
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          AppTheme.primaryColor,
-                          AppTheme.primaryColor.withValues(alpha: 0.8),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.primaryColor.withValues(alpha: 0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'معادلة الحساب التلقائي:',
-                              style: TextStyle(color: Colors.white70, fontSize: 12),
-                            ),
-                            Text(
-                              '${_requestedMeters.toStringAsFixed(2)} م × ${AppConstants.formatPrice(_selectedPipe!.calculatedPricePerMeter)}',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        const Divider(color: Colors.white24),
-                        const SizedBox(height: 8),
-
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'المبلغ الإجمالي المطلـوب:',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                            Text(
-                              AppConstants.formatPrice(_calculatedTotal),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 26,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Add to Cart Button
-                  ElevatedButton.icon(
-                    onPressed: _calculatedTotal > 0 ? _addToCart : null,
-                    icon: const Icon(Icons.shopping_cart_checkout, size: 22),
-                    label: const Text(
-                      'إضافة الأنبوب إلى الفاتورة',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      elevation: 4,
-                    ),
+                  const Spacer(),
+                  Text(
+                    '${AppConstants.formatPrice(pipe.calculatedPricePerMeter)}/م',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.primaryColor),
                   ),
                 ],
-              ],
+              ),
             ),
           );
         },
@@ -422,43 +475,383 @@ class _PipeCuttingSalePageState extends State<PipeCuttingSalePage> {
     );
   }
 
-  Widget _buildFilterChip(String value, String label, {Color? color}) {
-    final isSelected = _selectedMaterialFilter == value;
-    final activeColor = color ?? AppTheme.primaryColor;
-
-    return ChoiceChip(
-      selected: isSelected,
-      label: Text(label),
-      selectedColor: activeColor,
-      labelStyle: TextStyle(
-        color: isSelected ? Colors.white : Theme.of(context).colorScheme.onSurface,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+  Widget _buildPipeInfoCard(Product pipe, Color cardColor, ThemeData theme) {
+    final color = _categoryColor(pipe.pipeType ?? '');
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
-      onSelected: (_) {
-        setState(() {
-          _selectedMaterialFilter = value;
-        });
-      },
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(Icons.architecture, color: color, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(pipe.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(
+                  'طول كامل: ${pipe.fullLength ?? 6}م  |  سعر أنبوب: ${AppConstants.formatPrice(pipe.fullPrice ?? pipe.price)}',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('سعر المتر', style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
+              Text(
+                AppConstants.formatPrice(pipe.calculatedPricePerMeter),
+                style: TextStyle(
+                    fontWeight: FontWeight.w900, fontSize: 16, color: color),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildPresetChip(double meters, String label, {bool isFull = false}) {
-    final isSelected = (_requestedMeters - meters).abs() < 0.01;
-    return ActionChip(
-      label: Text(
-        label,
-        style: TextStyle(
-          color: isSelected ? Colors.white : (isFull ? Colors.amber[900] : AppTheme.primaryColor),
-          fontWeight: isSelected || isFull ? FontWeight.bold : FontWeight.normal,
+  Widget _buildMetersInput(ThemeData theme) {
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardTheme.color ?? theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          // Minus
+          _StepButton(
+            icon: Icons.remove,
+            color: Colors.red.shade400,
+            onTap: () => _adjustMeters(-0.25),
+            onLongPress: () => _adjustMeters(-1.0),
+          ),
+          // Value display
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _showCustomInputDialog(),
+              child: Column(
+                children: [
+                  Text(
+                    _requestedMeters == _requestedMeters.truncateToDouble()
+                        ? _requestedMeters.toInt().toString()
+                        : _requestedMeters.toStringAsFixed(2),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.primaryColor),
+                  ),
+                  Text('متر', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                ],
+              ),
+            ),
+          ),
+          // Plus
+          _StepButton(
+            icon: Icons.add,
+            color: Colors.green.shade600,
+            onTap: () => _adjustMeters(0.25),
+            onLongPress: () => _adjustMeters(1.0),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPresetButtons() {
+    final fullLength = _selectedPipe?.fullLength;
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        ..._presets.map((m) {
+          final isSelected = (_requestedMeters - m).abs() < 0.01;
+          return _PresetBtn(
+            label: m == m.truncateToDouble() ? '${m.toInt()}م' : '${m}م',
+            selected: isSelected,
+            onTap: () => _setPreset(m),
+          );
+        }),
+        if (fullLength != null)
+          _PresetBtn(
+            label: 'كامل (${fullLength}م)',
+            selected: (_requestedMeters - fullLength).abs() < 0.01,
+            onTap: () => _setPreset(fullLength),
+            isFullPipe: true,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildTotalCard() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppTheme.primaryColor, AppTheme.primaryColor.withValues(alpha: 0.8)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [BoxShadow(
+          color: AppTheme.primaryColor.withValues(alpha: 0.3),
+          blurRadius: 12, offset: const Offset(0, 4),
+        )],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('الإجمالي', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              const SizedBox(height: 2),
+              Text(
+                '${_requestedMeters.toStringAsFixed(2)} م × ${AppConstants.formatPrice(_selectedPipe!.calculatedPricePerMeter)}',
+                style: const TextStyle(color: Colors.white60, fontSize: 11),
+              ),
+            ],
+          ),
+          Text(
+            AppConstants.formatPrice(_calculatedTotal),
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w900, fontSize: 28),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddButton() {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
+        child: ElevatedButton.icon(
+          onPressed: _calculatedTotal > 0 ? _addToCart : null,
+          icon: const Icon(Icons.shopping_cart_checkout, size: 22),
+          label: Text(
+            'إضافة للفاتورة  ${_calculatedTotal > 0 ? AppConstants.formatPrice(_calculatedTotal) : ""}',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppTheme.primaryColor,
+            foregroundColor: Colors.white,
+            minimumSize: const Size.fromHeight(56),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 4,
+          ),
         ),
       ),
-      backgroundColor: isSelected
-          ? AppTheme.primaryColor
-          : (isFull ? Colors.amber.withValues(alpha: 0.15) : AppTheme.primaryColor.withValues(alpha: 0.08)),
-      side: BorderSide(
-        color: isSelected ? AppTheme.primaryColor : (isFull ? Colors.amber : AppTheme.primaryColor.withValues(alpha: 0.2)),
+    );
+  }
+
+  Widget _buildNoPipesWarning() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.amber.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.amber),
       ),
-      onPressed: () => _setPresetMeters(meters),
+      child: Column(
+        children: [
+          const Text('لا توجد أنابيب من هذا النوع',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber)),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => context.push('/pipes/add'),
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('إضافة أنبوب'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCustomInputDialog() {
+    final ctrl = TextEditingController(text: _requestedMeters.toString());
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('أدخل الطول بالمتر'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          autofocus: true,
+          decoration: const InputDecoration(
+            suffixText: 'متر',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          ElevatedButton(
+            onPressed: () {
+              final v = double.tryParse(ctrl.text);
+              if (v != null && v > 0) setState(() => _requestedMeters = v);
+              Navigator.pop(ctx);
+            },
+            child: const Text('تأكيد'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _categoryColor(String pipeType) {
+    switch (pipeType.toLowerCase()) {
+      case 'pvc': return const Color(0xFF1976D2);
+      case 'copper': return const Color(0xFFE65100);
+      case 'pprc':
+      case 'pp': return const Color(0xFF388E3C);
+      case 'iron':
+      case 'steel': return const Color(0xFF546E7A);
+      case 'hdpe': return const Color(0xFF6A1B9A);
+      default: return const Color(0xFF37474F);
+    }
+  }
+}
+
+// ── Reusable sub-widgets ─────────────────────────────────────────────────────
+
+class _CategoryChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final Color color;
+  final String? subtitle;
+  final VoidCallback onTap;
+
+  const _CategoryChip({
+    required this.label,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+    this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? color : color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? color : color.withValues(alpha: 0.3),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: selected ? Colors.white : color),
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(width: 4),
+              Text(
+                subtitle!,
+                style: TextStyle(
+                    fontSize: 10,
+                    color: selected ? Colors.white70 : color.withValues(alpha: 0.7)),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StepButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  const _StepButton({
+    required this.icon,
+    required this.color,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Container(
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Icon(icon, color: color, size: 26),
+      ),
+    );
+  }
+}
+
+class _PresetBtn extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool isFullPipe;
+
+  const _PresetBtn({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.isFullPipe = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isFullPipe ? Colors.amber.shade800 : AppTheme.primaryColor;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? color : color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: selected ? color : color.withValues(alpha: 0.25)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: selected ? Colors.white : color),
+        ),
+      ),
     );
   }
 }

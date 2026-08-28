@@ -14,6 +14,8 @@ import '../../domain/entities/cart_item.dart';
 import '../../../../core/data/hive_database.dart';
 import '../../../product/domain/entities/product.dart';
 import '../../../../core/utils/app_constants.dart';
+import '../../../../core/utils/fuzzy_search.dart';
+import '../../../../core/utils/category_color_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -42,6 +44,9 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    if (!kIsWeb && (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
+      _isCameraOn = false;
+    }
     _startBarcodeHintTimer();
   }
 
@@ -75,23 +80,37 @@ class _HomePageState extends State<HomePage> {
       setState(() => _searchResults = []);
       return;
     }
-    // Multi-word search: every word must match at least one field
-    final queryWords = query.toLowerCase().split(RegExp(r'\s+'));
+    // Smart fuzzy search: name, barcode, brand, category, size, diameter, pipeType, SKU, description
     final allProducts = HiveDatabase.productBox.values
         .map((m) => m.toEntity())
-        .where((p) {
-          final fields = [
-            p.name.toLowerCase(),
-            p.barcode.toLowerCase(),
-            if (p.brand != null) p.brand!.toLowerCase(),
-            if (p.category != null) p.category!.toLowerCase(),
-            if (p.size != null) p.size!.toLowerCase(),
-          ].join(' ');
-          return queryWords.every((word) => fields.contains(word));
-        })
-        .take(8)
         .toList();
-    setState(() => _searchResults = allProducts);
+
+    final fuzzyResults = FuzzySearch.search<Product>(
+      query: query,
+      items: allProducts,
+      getSearchableFields: (p) => [
+        p.name,
+        p.barcode,
+        if (p.brand != null) p.brand!,
+        if (p.category != null) p.category!,
+        if (p.size != null) p.size!,
+        if (p.diameter != null) p.diameter!,
+        if (p.pipeType != null) p.pipeType!,
+        if (p.sku != null) p.sku!,
+        if (p.description != null) p.description!,
+        if (p.origin != null) p.origin!,
+        if (p.color != null) p.color!,
+        // Also add numeric representations for measurements
+        if (p.fullLength != null) p.fullLength!.toString(),
+        if (p.fullPrice != null) p.fullPrice!.toString(),
+      ],
+      threshold: 0.28,
+      maxResults: 12,
+    );
+
+    setState(() {
+      _searchResults = fuzzyResults.map((e) => allProducts[e.key]).toList();
+    });
   }
 
   void _addProductFromSearch(Product product) {
@@ -194,7 +213,7 @@ class _HomePageState extends State<HomePage> {
                   if (_isCameraOn && mounted) _scannerController.start();
                 },
           icon: Icons.payment,
-          label: 'Review Order',
+          label: 'مراجعة الطلب والدفع',
         );
       }),
     );
@@ -206,16 +225,49 @@ class _HomePageState extends State<HomePage> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          MobileScanner(
-            controller: _scannerController,
-            onDetect: _onDetect,
-          ),
-          if (!_isCameraOn) _buildCameraOffState(),
+          if (_isCameraOn)
+            MobileScanner(
+              controller: _scannerController,
+              onDetect: _onDetect,
+              errorBuilder: (context, error, child) {
+                return _buildCameraOffState();
+              },
+            )
+          else
+            _buildCameraOffState(),
 
-          // Overlay Actions (Top Right)
+          // Overlay Actions (Top Left - Financial Hub & Shop)
           Positioned(
-            top: MediaQuery.of(context).padding.top + 16,
-            right: 16,
+            top: MediaQuery.of(context).padding.top + 12,
+            left: 12,
+            child: Column(
+              children: [
+                _buildOverlayButton(
+                  icon: Icons.account_balance_wallet,
+                  color: Colors.indigo.shade700,
+                  onPressed: () async {
+                    _scannerController.stop();
+                    await context.push('/financial-hub');
+                    if (_isCameraOn && mounted) _scannerController.start();
+                  },
+                ),
+                _buildOverlayButton(
+                  icon: Icons.storefront,
+                  color: Colors.blue.shade800,
+                  onPressed: () async {
+                    _scannerController.stop();
+                    await context.push('/shop');
+                    if (_isCameraOn && mounted) _scannerController.start();
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          // Overlay Actions (Top Right — essential controls only)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 12,
+            right: 12,
             child: Column(
               children: [
                 _buildOverlayButton(
@@ -226,7 +278,6 @@ class _HomePageState extends State<HomePage> {
                     if (_isCameraOn && mounted) _scannerController.start();
                   },
                 ),
-                const SizedBox(height: 16),
                 if (_isCameraOn)
                   _buildOverlayButton(
                     icon:
@@ -236,10 +287,8 @@ class _HomePageState extends State<HomePage> {
                       _scannerController.toggleTorch();
                     },
                   ),
-                if (_isCameraOn) const SizedBox(height: 16),
                 _buildOverlayButton(
                   icon: _isCameraOn ? Icons.videocam : Icons.videocam_off,
-                  // color:  Colors.white24 ,
                   onPressed: () {
                     setState(() {
                       _isCameraOn = !_isCameraOn;
@@ -251,34 +300,11 @@ class _HomePageState extends State<HomePage> {
                     }
                   },
                 ),
-                const SizedBox(height: 16),
                 // Smart Recognition (AI) overlay button
                 _buildOverlayButton(
                   icon: Icons.auto_awesome,
                   color: AppTheme.primaryColor,
                   onPressed: _openSmartRecognition,
-                ),
-                const SizedBox(height: 16),
-                // AI Chat Overlay Button
-                _buildOverlayButton(
-                  icon: Icons.smart_toy,
-                  color: AppTheme.primaryColor,
-                  onPressed: () async {
-                    _scannerController.stop();
-                    await context.push('/ai-chat');
-                    if (_isCameraOn && mounted) _scannerController.start();
-                  },
-                ),
-                const SizedBox(height: 16),
-                // Invoices & Debts Overlay Button
-                _buildOverlayButton(
-                  icon: Icons.receipt_long,
-                  color: Colors.amber[800],
-                  onPressed: () async {
-                    _scannerController.stop();
-                    await context.push('/invoices');
-                    if (_isCameraOn && mounted) _scannerController.start();
-                  },
                 ),
               ],
             ),
@@ -316,7 +342,7 @@ class _HomePageState extends State<HomePage> {
                 onPressed: _openSmartRecognition,
                 icon: const Icon(Icons.auto_awesome, color: Colors.white, size: 20),
                 label: const Text(
-                  '✨ Smart AI Search (Default)',
+                  '✨ بحث ذكي بالصورة',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
@@ -375,7 +401,7 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 16),
           const Text(
-            'Camera is turned off',
+            'الكاميرا مطفأة',
             style: TextStyle(
                 color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
           ),
@@ -383,7 +409,7 @@ class _HomePageState extends State<HomePage> {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 32),
             child: Text(
-              'Turn on your camera to start scanning barcodes and items automatically.',
+              'شغّل الكاميرا لمسح الباركود تلقائياً',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white70, fontSize: 12),
             ),
@@ -398,7 +424,7 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),
             icon: const Icon(Icons.videocam),
-            label: const Text('Turn on Camera',
+            label: const Text('تشغيل الكاميرا',
                 style: TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () {
               setState(() => _isCameraOn = true);
@@ -413,17 +439,52 @@ class _HomePageState extends State<HomePage> {
   Widget _buildOverlayButton(
       {required IconData icon, required VoidCallback onPressed, Color? color}) {
     return Container(
-      width: 44,
-      height: 44,
-      margin: const EdgeInsets.only(bottom: 12),
+      width: 40,
+      height: 40,
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: color ?? Colors.black45,
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white24),
       ),
       child: IconButton(
-        icon: Icon(icon, color: Colors.white),
+        icon: Icon(icon, color: Colors.white, size: 20),
         onPressed: onPressed,
+        padding: EdgeInsets.zero,
+      ),
+    );
+  }
+
+  Widget _buildQuickNavChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: color.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -474,12 +535,67 @@ class _HomePageState extends State<HomePage> {
           Container(
             width: 48,
             height: 4,
-            margin: const EdgeInsets.symmetric(vertical: 12),
+            margin: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
               color: Colors.grey.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
+
+          // Quick Navigation — Specialty Shortcuts Only
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [
+                _buildQuickNavChip(
+                  icon: Icons.content_cut,
+                  label: '✂️ قطع الأنابيب',
+                  color: Colors.blue.shade700,
+                  onTap: () async {
+                    _scannerController.stop();
+                    await context.push('/pipe-sales');
+                    if (_isCameraOn && mounted) _scannerController.start();
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildQuickNavChip(
+                  icon: Icons.electrical_services,
+                  label: '⚡ الكهرباء',
+                  color: Colors.orange.shade700,
+                  onTap: () async {
+                    _scannerController.stop();
+                    await context.push('/electrical-products');
+                    if (_isCameraOn && mounted) _scannerController.start();
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildQuickNavChip(
+                  icon: Icons.format_paint,
+                  label: '🎨 الطلاء',
+                  color: Colors.green.shade700,
+                  onTap: () async {
+                    _scannerController.stop();
+                    await context.push('/paint-products');
+                    if (_isCameraOn && mounted) _scannerController.start();
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildQuickNavChip(
+                  icon: Icons.view_list,
+                  label: '📦 الأنابيب',
+                  color: Colors.blueGrey.shade600,
+                  onTap: () async {
+                    _scannerController.stop();
+                    await context.push('/pipes');
+                    if (_isCameraOn && mounted) _scannerController.start();
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
 
           // Header with search toggle
           BlocBuilder<BillingBloc, BillingState>(
@@ -495,10 +611,10 @@ class _HomePageState extends State<HomePage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Scanned Items',
+                          const Text('سلة المشتريات',
                               style: TextStyle(
                                   fontSize: 18, fontWeight: FontWeight.w600)),
-                          Text('$totalItems items total',
+                          Text('$totalItems منتج',
                               style: const TextStyle(
                                   fontSize: 12, color: Colors.grey)),
                         ],
@@ -648,7 +764,7 @@ class _HomePageState extends State<HomePage> {
               autofocus: true,
               style: TextStyle(fontSize: 14, color: theme.colorScheme.onSurface),
               decoration: InputDecoration(
-                hintText: 'Search by name, brand, or barcode...',
+                hintText: 'بحث بالاسم، الماركة، الباركود...',
                 hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
                 prefixIcon: Icon(Icons.search, color: Colors.grey[400], size: 20),
                 suffixIcon: _searchController.text.isNotEmpty
@@ -675,7 +791,7 @@ class _HomePageState extends State<HomePage> {
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                'No products found for "${_searchController.text}"',
+                'لم يتم العثور على "${_searchController.text}" — جرب كلمة قريبة',
                 style: TextStyle(color: Colors.grey[500], fontSize: 12),
                 textAlign: TextAlign.center,
               ),
@@ -714,6 +830,7 @@ class _HomePageState extends State<HomePage> {
           separatorBuilder: (_, __) => Divider(height: 1, color: borderColor),
           itemBuilder: (context, index) {
             final product = _searchResults[index];
+            final catColor = CategoryColorService.getColor(product.category);
             return InkWell(
               onTap: () => _addProductFromSearch(product),
               borderRadius: index == 0
@@ -721,20 +838,45 @@ class _HomePageState extends State<HomePage> {
                   : index == _searchResults.length - 1
                       ? const BorderRadius.vertical(bottom: Radius.circular(12))
                       : BorderRadius.zero,
-              child: Padding(
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    left: BorderSide(color: catColor, width: 3),
+                  ),
+                  borderRadius: index == 0
+                      ? const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12))
+                      : index == _searchResults.length - 1
+                          ? const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12))
+                          : BorderRadius.zero,
+                ),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 child: Row(
                   children: [
-                    // Product icon/thumbnail
+                    // Product image or colored icon
                     Container(
-                      width: 36,
-                      height: 36,
+                      width: 44,
+                      height: 44,
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
+                        color: catColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: catColor.withValues(alpha: 0.35),
+                          width: 1.5,
+                        ),
                       ),
-                      child: const Icon(Icons.inventory_2_outlined,
-                          size: 18, color: AppTheme.primaryColor),
+                      clipBehavior: Clip.antiAlias,
+                      child: product.imagePaths.isNotEmpty && !kIsWeb
+                          ? Image.file(
+                              File(product.imagePaths.first),
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Icon(
+                                  Icons.inventory_2_outlined,
+                                  size: 20,
+                                  color: catColor),
+                            )
+                          : Icon(Icons.inventory_2_outlined,
+                              size: 20,
+                              color: catColor),
                     ),
                     const SizedBox(width: 10),
                     // Product details
@@ -747,17 +889,49 @@ class _HomePageState extends State<HomePage> {
                                   fontWeight: FontWeight.w600, fontSize: 13, color: onSurfaceColor),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 2),
                           Row(
                             children: [
                               Text(AppConstants.formatPrice(product.price),
                                   style: TextStyle(
-                                      color: onSurfaceColor.withValues(alpha: 0.6), fontSize: 12)),
-                              if (product.brand != null) ...[
+                                      color: onSurfaceColor.withValues(alpha: 0.6), fontSize: 12, fontWeight: FontWeight.w600)),
+                              if (product.category != null) ...[
                                 const SizedBox(width: 6),
-                                Text('• ${product.brand}',
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: catColor.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: catColor.withValues(alpha: 0.3)),
+                                  ),
+                                  child: Text(
+                                    product.category!,
                                     style: TextStyle(
-                                        color: Colors.grey[400], fontSize: 11)),
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                      color: catColor,
+                                    ),
+                                  ),
+                                ),
                               ],
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: product.stock > 0
+                                      ? Colors.green.withValues(alpha: 0.1)
+                                      : Colors.red.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  '${product.stock} وحدة',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: product.stock > 0 ? Colors.green.shade700 : Colors.red.shade400,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ],
@@ -767,8 +941,9 @@ class _HomePageState extends State<HomePage> {
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: Colors.green.withValues(alpha: 0.15),
+                        color: Colors.green.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
                       ),
                       child: const Icon(Icons.add, size: 18, color: Colors.green),
                     ),
@@ -789,11 +964,12 @@ class _HomePageState extends State<HomePage> {
         children: [
           Icon(Icons.search, size: 48, color: Colors.grey[400]),
           const SizedBox(height: 12),
-          const Text('Search Products',
+          const Text('ابحث عن المنتجات',
               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
           const SizedBox(height: 6),
-          Text('Type a product name, brand, or barcode',
-              style: TextStyle(fontSize: 13, color: Colors.grey[500])),
+          Text('اكتب اسم المنتج أو الماركة أو الباركود — البحث يتحمل الأخطاء الإملائية ✨',
+              style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+              textAlign: TextAlign.center),
         ],
       ),
     );
@@ -819,13 +995,13 @@ class _HomePageState extends State<HomePage> {
                 Icon(Icons.shopping_basket, size: 40, color: Colors.grey[400]),
           ),
           const SizedBox(height: 16),
-          const Text('List is empty',
+          const Text('السلة فارغة',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           const SizedBox(height: 8),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 40),
             child: Text(
-              'Scanned items will appear here as you scan them with the camera above.',
+              'امسح الباركود بالكاميرا أو ابحث عن المنتج باسمه لإضافته هنا',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey, fontSize: 14),
             ),
@@ -844,106 +1020,154 @@ class _HomePageState extends State<HomePage> {
     final borderColor = theme.dividerColor.withValues(alpha: 0.2);
     final onSurfaceColor = theme.colorScheme.onSurface;
 
+    final catColor = CategoryColorService.getColor(item.product.category);
+
     return Container(
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: borderColor),
         boxShadow: const [
           BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))
         ],
       ),
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        spacing: 1,
-        children: [
-          // Product thumbnail
-          Container(
-            width: 40,
-            height: 40,
-            margin: const EdgeInsets.only(right: 10),
-            decoration: BoxDecoration(
-              color: AppTheme.primaryColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: item.product.imagePaths.isNotEmpty && !kIsWeb
-                ? Image.file(
-                    File(item.product.imagePaths.first),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Icon(
-                        Icons.inventory_2_outlined,
-                        color: AppTheme.primaryColor,
-                        size: 20),
-                  )
-                : const Icon(Icons.inventory_2_outlined,
-                    color: AppTheme.primaryColor, size: 20),
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.product.name,
-                  style: TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 14, color: onSurfaceColor),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            // Colored left accent border for category
+            Container(
+              width: 4,
+              decoration: BoxDecoration(
+                color: catColor,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [catColor, catColor.withValues(alpha: 0.6)],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  AppConstants.formatPrice(item.product.price),
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: onSurfaceColor.withValues(alpha: 0.6)),
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  spacing: 1,
+                  children: [
+                    // Product thumbnail with category color
+                    Container(
+                      width: 44,
+                      height: 44,
+                      margin: const EdgeInsets.only(right: 10),
+                      decoration: BoxDecoration(
+                        color: catColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: catColor.withValues(alpha: 0.3),
+                          width: 1.5,
+                        ),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: item.product.imagePaths.isNotEmpty && !kIsWeb
+                          ? Image.file(
+                              File(item.product.imagePaths.first),
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Icon(
+                                  Icons.inventory_2_outlined,
+                                  color: catColor,
+                                  size: 20),
+                            )
+                          : Icon(Icons.inventory_2_outlined,
+                              color: catColor, size: 20),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.product.name,
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 14, color: onSurfaceColor),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Text(
+                                AppConstants.formatPrice(item.product.price),
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: onSurfaceColor.withValues(alpha: 0.6)),
+                              ),
+                              if (item.product.category != null) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: catColor.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: catColor.withValues(alpha: 0.25)),
+                                  ),
+                                  child: Text(
+                                    item.product.category!,
+                                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: catColor),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: borderColor),
+                      ),
+                      padding: const EdgeInsets.all(4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _circularIconButton(
+                              icon: Icons.remove,
+                              color: onSurfaceColor,
+                              onPressed: () {
+                                if (item.quantity > 1) {
+                                  context.read<BillingBloc>().add(UpdateQuantityEvent(
+                                      item.product.id, item.quantity - 1));
+                                } else {
+                                  context
+                                      .read<BillingBloc>()
+                                      .add(RemoveProductFromCartEvent(item.product.id));
+                                }
+                              }),
+                          SizedBox(
+                            width: 32,
+                            child: Text(
+                              '${item.quantity}',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontWeight: FontWeight.bold, color: onSurfaceColor),
+                            ),
+                          ),
+                          _circularIconButton(
+                              icon: Icons.add,
+                              color: onSurfaceColor,
+                              onPressed: () {
+                                context.read<BillingBloc>().add(UpdateQuantityEvent(
+                                    item.product.id, item.quantity + 1));
+                              }),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: borderColor),
-            ),
-            padding: const EdgeInsets.all(4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _circularIconButton(
-                    icon: Icons.remove,
-                    color: onSurfaceColor,
-                    onPressed: () {
-                      if (item.quantity > 1) {
-                        context.read<BillingBloc>().add(UpdateQuantityEvent(
-                            item.product.id, item.quantity - 1));
-                      } else {
-                        context
-                            .read<BillingBloc>()
-                            .add(RemoveProductFromCartEvent(item.product.id));
-                      }
-                    }),
-                SizedBox(
-                  width: 32,
-                  child: Text(
-                    '${item.quantity}',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.bold, color: onSurfaceColor),
-                  ),
-                ),
-                _circularIconButton(
-                    icon: Icons.add,
-                    color: onSurfaceColor,
-                    onPressed: () {
-                      context.read<BillingBloc>().add(UpdateQuantityEvent(
-                          item.product.id, item.quantity + 1));
-                    }),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

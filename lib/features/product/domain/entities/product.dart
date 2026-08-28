@@ -5,7 +5,8 @@ class Product extends Equatable {
       id; // Using barcode as ID usually, but keeping separate ID is safer
   final String name;
   final String barcode;
-  final double price;
+  final double price; // Selling Price (سعر البيع)
+  final double costPrice; // Cost Price / Purchase Price (سعر الشراء / التكلفة)
   final int stock; // Optional implementation detail
 
   // Smart Recognition fields (all nullable for backward compatibility)
@@ -35,6 +36,7 @@ class Product extends Equatable {
     required this.name,
     required this.barcode,
     required this.price,
+    this.costPrice = 0.0,
     this.stock = 0,
     this.sku,
     this.category,
@@ -62,11 +64,15 @@ class Product extends Equatable {
     return price;
   }
 
+  /// Calculates profit per unit/meter
+  double get profitPerUnit => price - costPrice;
+
   Product copyWith({
     String? id,
     String? name,
     String? barcode,
     double? price,
+    double? costPrice,
     int? stock,
     String? sku,
     String? category,
@@ -90,6 +96,7 @@ class Product extends Equatable {
       name: name ?? this.name,
       barcode: barcode ?? this.barcode,
       price: price ?? this.price,
+      costPrice: costPrice ?? this.costPrice,
       stock: stock ?? this.stock,
       sku: sku ?? this.sku,
       category: category ?? this.category,
@@ -116,6 +123,7 @@ class Product extends Equatable {
         name,
         barcode,
         price,
+        costPrice,
         stock,
         sku,
         category,

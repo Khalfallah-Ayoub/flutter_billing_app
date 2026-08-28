@@ -110,19 +110,9 @@ class ProductBloc extends Bloc<ProductEvent, ProductState> {
       if (embedding != null && embedding.isNotEmpty) {
         final existingModel = HiveDatabase.productBox.get(product.id);
         if (existingModel != null) {
-          final updatedModel = ProductModel(
-            id: existingModel.id,
-            name: existingModel.name,
-            barcode: existingModel.barcode,
-            price: existingModel.price,
-            stock: existingModel.stock,
-            sku: existingModel.sku,
-            category: existingModel.category,
-            brand: existingModel.brand,
-            size: existingModel.size,
-            imagePaths: existingModel.imagePaths,
-            embedding: embedding,
-            ocrText: existingModel.ocrText,
+          // Use fromEntity to preserve ALL fields, then set embedding
+          final updatedModel = ProductModel.fromEntity(
+            existingModel.toEntity().copyWith(embedding: embedding),
           );
           await HiveDatabase.productBox.put(existingModel.id, updatedModel);
           debugPrint(

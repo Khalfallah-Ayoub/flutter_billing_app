@@ -12,11 +12,48 @@ import 'features/settings/presentation/bloc/printer_bloc.dart';
 import 'features/settings/presentation/bloc/printer_event.dart';
 import 'features/invoice/presentation/bloc/invoice_bloc.dart';
 import 'features/invoice/presentation/bloc/customer_bloc.dart';
+import 'features/expense/presentation/bloc/expense_bloc.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await HiveDatabase.init();
-  await di.init();
+
+  // Custom error UI instead of white screen if any widget fails
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.red, size: 48),
+              const SizedBox(height: 16),
+              const Text(
+                'حدث خطأ في النظام',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                details.exceptionAsString(),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  };
+
+  try {
+    await HiveDatabase.init();
+    await di.init();
+  } catch (e, stack) {
+    debugPrint('Startup init error: $e\n$stack');
+  }
+
   runApp(const MyApp());
 }
 
@@ -42,6 +79,8 @@ class MyApp extends StatelessWidget {
             create: (context) => InvoiceBloc()..add(LoadInvoicesEvent())),
         BlocProvider<CustomerBloc>(
             create: (context) => CustomerBloc()..add(LoadCustomersEvent())),
+        BlocProvider<ExpenseBloc>(
+            create: (context) => ExpenseBloc()..add(LoadExpensesEvent())),
       ],
       child: BlocBuilder<ThemeCubit, ThemeMode>(
         builder: (context, themeMode) {

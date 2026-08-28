@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/app_constants.dart';
 import '../../domain/entities/invoice.dart';
 import '../bloc/invoice_bloc.dart';
 import '../../data/services/invoice_pdf_service.dart';
@@ -15,41 +16,45 @@ class InvoiceListPage extends StatefulWidget {
   State<InvoiceListPage> createState() => _InvoiceListPageState();
 }
 
-class _InvoiceListPageState extends State<InvoiceListPage> {
+class _InvoiceListPageState extends State<InvoiceListPage>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   String _selectedStatus = 'all';
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        final statuses = ['all', 'paid', 'debt'];
+        _onStatusFilterSelected(statuses[_tabController.index]);
+      }
+    });
     context.read<InvoiceBloc>().add(LoadInvoicesEvent());
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
   void _onSearchChanged(String val) {
-    context.read<InvoiceBloc>().add(
-          FilterInvoicesEvent(
-            searchQuery: val,
-            statusFilter: _selectedStatus,
-          ),
-        );
+    context.read<InvoiceBloc>().add(FilterInvoicesEvent(
+          searchQuery: val,
+          statusFilter: _selectedStatus,
+        ));
   }
 
   void _onStatusFilterSelected(String status) {
-    setState(() {
-      _selectedStatus = status;
-    });
-    context.read<InvoiceBloc>().add(
-          FilterInvoicesEvent(
-            searchQuery: _searchController.text,
-            statusFilter: status,
-          ),
-        );
+    setState(() => _selectedStatus = status);
+    context.read<InvoiceBloc>().add(FilterInvoicesEvent(
+          searchQuery: _searchController.text,
+          statusFilter: status,
+        ));
   }
 
   @override
@@ -59,23 +64,38 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('إدارة الفواتير والديون', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('الفواتير والديون',
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: true,
         leading: IconButton(
           icon: Icon(Icons.chevron_left, size: 28, color: theme.primaryColor),
           onPressed: () => context.pop(),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.people_alt, color: AppTheme.primaryColor),
-            tooltip: 'إدارة العملاء والديون',
+            icon: const Icon(Icons.people_alt),
+            color: AppTheme.primaryColor,
+            tooltip: 'إدارة العملاء',
             onPressed: () => context.push('/customers'),
           ),
           IconButton(
-            icon: const Icon(Icons.refresh, color: AppTheme.primaryColor),
-            tooltip: 'تحديث البيانات',
+            icon: const Icon(Icons.refresh),
+            color: AppTheme.primaryColor,
+            tooltip: 'تحديث',
             onPressed: () => context.read<InvoiceBloc>().add(LoadInvoicesEvent()),
           ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: AppTheme.primaryColor,
+          unselectedLabelColor: Colors.grey,
+          indicatorColor: AppTheme.primaryColor,
+          tabs: const [
+            Tab(icon: Icon(Icons.receipt_long, size: 18), text: 'الكل'),
+            Tab(icon: Icon(Icons.check_circle, size: 18), text: 'مدفوعة'),
+            Tab(icon: Icon(Icons.warning_amber, size: 18), text: 'ديون'),
+          ],
+        ),
       ),
       body: BlocConsumer<InvoiceBloc, InvoiceState>(
         listener: (context, state) {
@@ -92,98 +112,92 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
 
           final allInvoices = state.allInvoices;
           final invoices = state.filteredInvoices;
-
           final totalRevenue = state.totalRevenue;
           final totalDebt = state.totalRemainingDebt;
 
           return Column(
             children: [
-              // Summary Metrics Header
+              // ── Stats Header ─────────────────────────────────────
               Container(
-                padding: const EdgeInsets.all(16),
                 color: theme.colorScheme.surface,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 child: Column(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildMetricCard(
-                            title: 'إجمالي المبيعات',
-                            value: '${totalRevenue.toStringAsFixed(0)} دج',
-                            icon: Icons.payments,
-                            color: Colors.green,
-                            isDark: isDark,
-                          ),
+                    Row(children: [
+                      Expanded(
+                        child: _StatCard(
+                          label: 'إجمالي المبيعات',
+                          value: AppConstants.formatPrice(totalRevenue),
+                          icon: Icons.trending_up,
+                          color: Colors.green,
+                          isDark: isDark,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildMetricCard(
-                            title: 'الديون المعلقة',
-                            value: '${totalDebt.toStringAsFixed(0)} دج',
-                            icon: Icons.warning_amber_rounded,
-                            color: Colors.orange,
-                            isDark: isDark,
-                          ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StatCard(
+                          label: 'الديون المعلقة',
+                          value: AppConstants.formatPrice(totalDebt),
+                          icon: Icons.account_balance_wallet,
+                          color: totalDebt > 0 ? Colors.orange : Colors.green,
+                          isDark: isDark,
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StatCard(
+                          label: 'عدد الفواتير',
+                          value: '${allInvoices.length}',
+                          icon: Icons.receipt_long,
+                          color: AppTheme.primaryColor,
+                          isDark: isDark,
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 10),
 
-                    // Search Input
-                    TextFormField(
+                    // Search bar
+                    TextField(
                       controller: _searchController,
                       onChanged: _onSearchChanged,
                       decoration: InputDecoration(
-                        hintText: 'بحث باسم الزبون، رقم الفاتورة، أو الهاتف...',
-                        prefixIcon: const Icon(Icons.search),
+                        hintText: 'بحث: اسم الزبون، رقم الفاتورة، الهاتف...',
+                        prefixIcon: const Icon(Icons.search, size: 20),
                         suffixIcon: _searchController.text.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(Icons.clear),
+                                icon: const Icon(Icons.clear, size: 18),
                                 onPressed: () {
                                   _searchController.clear();
                                   _onSearchChanged('');
                                 },
                               )
                             : null,
+                        contentPadding: const EdgeInsets.symmetric(
+                            vertical: 10, horizontal: 14),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        filled: true,
+                        fillColor: theme.colorScheme.surfaceContainerHighest
+                            .withValues(alpha: 0.35),
                       ),
                     ),
-                    const SizedBox(height: 12),
-
-                    // Filter Chips
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          _buildFilterChip('all', 'الكل (${allInvoices.length})'),
-                          const SizedBox(width: 8),
-                          _buildFilterChip(
-                              'paid',
-                              'مدفوعة (${allInvoices.where((i) => i.isPaid).length})',
-                              Colors.green),
-                          const SizedBox(width: 8),
-                          _buildFilterChip(
-                              'debt',
-                              'ديون معلقة (${allInvoices.where((i) => i.hasDebt).length})',
-                              Colors.orange),
-                        ],
-                      ),
-                    ),
+                    const SizedBox(height: 10),
                   ],
                 ),
               ),
               const Divider(height: 1),
 
-              // Invoice Items List
+              // ── Invoice List ─────────────────────────────────────
               Expanded(
                 child: invoices.isEmpty
-                    ? _buildEmptyState(isDark)
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
+                    ? _buildEmptyState()
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(14),
                         itemCount: invoices.length,
-                        itemBuilder: (context, index) {
-                          final inv = invoices[index];
-                          return _buildInvoiceCard(inv, isDark);
-                        },
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: 10),
+                        itemBuilder: (context, index) =>
+                            _buildInvoiceCard(invoices[index], isDark, theme),
                       ),
               ),
             ],
@@ -193,257 +207,353 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push('/invoices/create'),
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          'إنشاء فاتورة جديدة',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-        ),
+        label: const Text('فاتورة جديدة',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: AppTheme.primaryColor,
       ),
     );
   }
 
-  Widget _buildMetricCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color color,
-    required bool isDark,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: isDark ? 0.15 : 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.2),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                    color: color,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildInvoiceCard(Invoice inv, bool isDark, ThemeData theme) {
+    final dateFormat = DateFormat('dd/MM/yyyy  HH:mm');
 
-  Widget _buildFilterChip(String statusKey, String label, [Color? activeColor]) {
-    final isSelected = _selectedStatus == statusKey;
-    final theme = Theme.of(context);
-    final color = activeColor ?? AppTheme.primaryColor;
+    Color statusColor;
+    String statusText;
+    IconData statusIcon;
 
-    return FilterChip(
-      selected: isSelected,
-      label: Text(label),
-      selectedColor: color,
-      labelStyle: TextStyle(
-        color: isSelected ? Colors.white : theme.colorScheme.onSurface,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-      ),
-      onSelected: (_) => _onStatusFilterSelected(statusKey),
-    );
-  }
-
-  Widget _buildInvoiceCard(Invoice inv, bool isDark) {
-    final dateFormat = DateFormat('yyyy/MM/dd HH:mm');
-    final theme = Theme.of(context);
-
-    Color statusColor = Colors.green;
-    String statusText = 'مدفوعة بالكامل ✅';
-    if (inv.paymentStatus == PaymentStatus.unpaid) {
-      statusColor = Colors.red;
-      statusText = 'غير مدفوعة ❌';
-    } else if (inv.paymentStatus == PaymentStatus.partial) {
-      statusColor = Colors.orange;
-      statusText = 'دين جزئي ⚠️';
+    switch (inv.paymentStatus) {
+      case PaymentStatus.paid:
+        statusColor = Colors.green;
+        statusText = 'مدفوعة';
+        statusIcon = Icons.check_circle;
+        break;
+      case PaymentStatus.unpaid:
+        statusColor = Colors.red;
+        statusText = 'غير مدفوعة';
+        statusIcon = Icons.cancel;
+        break;
+      case PaymentStatus.partial:
+        statusColor = Colors.orange;
+        statusText = 'دين جزئي';
+        statusIcon = Icons.timelapse;
+        break;
     }
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top Row: Number & Status Badge
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardTheme.color ?? theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.2)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
+              blurRadius: 6,
+              offset: const Offset(0, 2))
+        ],
+      ),
+      child: InkWell(
+        onTap: () => context.push('/invoices/detail', extra: inv),
+        borderRadius: BorderRadius.circular(14),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: IntrinsicHeight(
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    const Icon(Icons.receipt_long, color: AppTheme.primaryColor, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      inv.invoiceNumber,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                  ],
-                ),
+                // Left status stripe
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  width: 4,
                   decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: statusColor.withValues(alpha: 0.4)),
-                  ),
-                  child: Text(
-                    statusText,
-                    style: TextStyle(
-                        color: statusColor, fontSize: 12, fontWeight: FontWeight.bold),
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [statusColor, statusColor.withValues(alpha: 0.6)],
+                    ),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Row 1: Invoice number + status badge
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(children: [
+                              const Icon(Icons.receipt_long,
+                                  color: AppTheme.primaryColor, size: 18),
+                              const SizedBox(width: 6),
+                              Text(inv.invoiceNumber,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold, fontSize: 15)),
+                            ]),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: statusColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: statusColor.withValues(alpha: 0.4)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(statusIcon, size: 13, color: statusColor),
+                                  const SizedBox(width: 4),
+                                  Text(statusText,
+                                      style: TextStyle(
+                                          color: statusColor,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
 
-            // Customer Name & Phone
-            Row(
-              children: [
-                const Icon(Icons.person_outline, size: 16, color: Colors.grey),
-                const SizedBox(width: 6),
-                Text(
-                  inv.customerName,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                if (inv.customerPhone != null && inv.customerPhone!.isNotEmpty) ...[
-                  const SizedBox(width: 12),
-                  const Icon(Icons.phone_outlined, size: 14, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Text(
-                    inv.customerPhone!,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        // Row 2: Customer info
+                        Row(children: [
+                          const Icon(Icons.person_outline,
+                              size: 15, color: Colors.grey),
+                          const SizedBox(width: 5),
+                          Text(inv.customerName,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 13)),
+                          if (inv.customerPhone?.isNotEmpty == true) ...[
+                            const SizedBox(width: 10),
+                            const Icon(Icons.phone_outlined,
+                                size: 13, color: Colors.grey),
+                            const SizedBox(width: 3),
+                            Text(inv.customerPhone!,
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.grey)),
+                          ],
+                        ]),
+                        const SizedBox(height: 10),
+
+                        // Row 3: Financial summary
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest
+                                .withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              _MiniStat(
+                                  label: 'الإجمالي',
+                                  value: AppConstants.formatPrice(inv.totalAmount),
+                                  color: theme.colorScheme.onSurface),
+                              const _Divider(),
+                              _MiniStat(
+                                  label: 'المدفوع',
+                                  value: AppConstants.formatPrice(inv.paidAmount),
+                                  color: Colors.green),
+                              if (inv.remainingAmount > 0) ...[
+                                const _Divider(),
+                                _MiniStat(
+                                    label: 'الدين',
+                                    value: AppConstants.formatPrice(
+                                        inv.remainingAmount),
+                                    color: Colors.red),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+
+                        // Row 4: Date + actions
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(children: [
+                              const Icon(Icons.access_time,
+                                  size: 13, color: Colors.grey),
+                              const SizedBox(width: 4),
+                              Text(dateFormat.format(inv.createdAt),
+                                  style: const TextStyle(
+                                      fontSize: 11, color: Colors.grey)),
+                            ]),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (inv.customerPhone?.isNotEmpty == true)
+                                  _ActionBtn(
+                                    icon: Icons.call,
+                                    color: Colors.green,
+                                    tooltip: 'اتصال',
+                                    onTap: () => InvoicePdfService.callCustomer(
+                                        inv.customerPhone!),
+                                  ),
+                                _ActionBtn(
+                                  icon: Icons.share,
+                                  color: AppTheme.primaryColor,
+                                  tooltip: 'مشاركة PDF',
+                                  onTap: () =>
+                                      InvoicePdfService.shareInvoicePdf(inv),
+                                ),
+                                _ActionBtn(
+                                  icon: Icons.print,
+                                  color: Colors.blueGrey,
+                                  tooltip: 'طباعة',
+                                  onTap: () =>
+                                      InvoicePdfService.printInvoice(inv),
+                                ),
+                                if (inv.remainingAmount > 0)
+                                  _ActionBtn(
+                                    icon: Icons.payments,
+                                    color: Colors.orange,
+                                    tooltip: 'تسديد دين',
+                                    onTap: () => context
+                                        .push('/invoices/detail', extra: inv),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 10),
-            const Divider(height: 1),
-            const SizedBox(height: 10),
-
-            // Financial Summary Row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('الإجمالي', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                    Text(
-                      '${inv.totalAmount.toStringAsFixed(2)} دج',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
-                  ],
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Text('المدفوع', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                    Text(
-                      '${inv.paidAmount.toStringAsFixed(2)} دج',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14, color: Colors.green),
-                    ),
-                  ],
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    const Text('المتبقي (الدين)', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                    Text(
-                      '${inv.remainingAmount.toStringAsFixed(2)} دج',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: inv.remainingAmount > 0 ? Colors.red : Colors.grey,
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-
-            // Date & Action Buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  dateFormat.format(inv.createdAt),
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
-                ),
-                Row(
-                  children: [
-                    if (inv.customerPhone != null && inv.customerPhone!.isNotEmpty)
-                      IconButton(
-                        icon: const Icon(Icons.call, color: Colors.green, size: 20),
-                        tooltip: 'اتصال بالزبون',
-                        onPressed: () => InvoicePdfService.callCustomer(inv.customerPhone!),
-                      ),
-                    IconButton(
-                      icon: const Icon(Icons.share, color: AppTheme.primaryColor, size: 20),
-                      tooltip: 'مشاركة PDF عبر واتساب',
-                      onPressed: () => InvoicePdfService.shareInvoicePdf(inv),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.print, color: Colors.blue, size: 20),
-                      tooltip: 'طباعة الفاتورة',
-                      onPressed: () => InvoicePdfService.printInvoice(inv),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.arrow_forward_ios, size: 16),
-                      onPressed: () => context.push('/invoices/detail', extra: inv),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildEmptyState(bool isDark) {
+  Widget _buildEmptyState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey[400]),
+          Icon(Icons.receipt_long_outlined, size: 72, color: Colors.grey[300]),
           const SizedBox(height: 16),
-          const Text(
-            'لا توجد فواتير مسجلة حالياً',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
+          const Text('لا توجد فواتير',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           const SizedBox(height: 8),
           const Text(
-            'قم بإضافة فاتورة جديدة أو إكمال عملية بيع ليتم تسجيلها تلقائياً',
+            'أكمل عملية بيع أو أنشئ فاتورة جديدة\nليتم تسجيلها هنا تلقائياً',
+            textAlign: TextAlign.center,
             style: TextStyle(color: Colors.grey, fontSize: 13),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Helper Widgets ────────────────────────────────────────────────────────────
+
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final bool isDark;
+
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isDark ? 0.15 : 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(height: 4),
+          Text(value,
+              style: TextStyle(
+                  fontWeight: FontWeight.w900, fontSize: 13, color: color)),
+          Text(label,
+              style: const TextStyle(fontSize: 9.5, color: Colors.grey),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _MiniStat({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+          const SizedBox(height: 1),
+          Text(value,
+              style: TextStyle(
+                  fontWeight: FontWeight.bold, fontSize: 12, color: color)),
+        ],
+      ),
+    );
+  }
+}
+
+class _Divider extends StatelessWidget {
+  const _Divider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 28,
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      color: Colors.grey.withValues(alpha: 0.2),
+    );
+  }
+}
+
+class _ActionBtn extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _ActionBtn({
+    required this.icon,
+    required this.color,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Icon(icon, size: 20, color: color),
+        ),
       ),
     );
   }

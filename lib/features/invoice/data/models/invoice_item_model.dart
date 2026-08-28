@@ -41,11 +41,16 @@ class InvoiceItemModel extends InvoiceItem {
   @override
   final double? lengthCut;
 
+  @HiveField(9)
+  @override
+  final double costPrice;
+
   const InvoiceItemModel({
     required this.productId,
     required this.productName,
     required this.barcode,
     required this.unitPrice,
+    this.costPrice = 0.0,
     required this.quantity,
     this.unit = 'قطعة',
     required this.subtotal,
@@ -56,6 +61,7 @@ class InvoiceItemModel extends InvoiceItem {
           productName: productName,
           barcode: barcode,
           unitPrice: unitPrice,
+          costPrice: costPrice,
           quantity: quantity,
           unit: unit,
           subtotal: subtotal,
@@ -69,6 +75,7 @@ class InvoiceItemModel extends InvoiceItem {
       productName: entity.productName,
       barcode: entity.barcode,
       unitPrice: entity.unitPrice,
+      costPrice: entity.costPrice,
       quantity: entity.quantity,
       unit: entity.unit,
       subtotal: entity.subtotal,
@@ -83,6 +90,7 @@ class InvoiceItemModel extends InvoiceItem {
       productName: productName,
       barcode: barcode,
       unitPrice: unitPrice,
+      costPrice: costPrice,
       quantity: quantity,
       unit: unit,
       subtotal: subtotal,
@@ -97,6 +105,7 @@ class InvoiceItemModel extends InvoiceItem {
       productName: map['productName'] as String? ?? '',
       barcode: map['barcode'] as String? ?? '',
       unitPrice: (map['unitPrice'] as num?)?.toDouble() ?? 0.0,
+      costPrice: (map['costPrice'] as num?)?.toDouble() ?? 0.0,
       quantity: (map['quantity'] as num?)?.toDouble() ?? 1.0,
       unit: map['unit'] as String? ?? 'قطعة',
       subtotal: (map['subtotal'] as num?)?.toDouble() ?? 0.0,
@@ -111,6 +120,7 @@ class InvoiceItemModel extends InvoiceItem {
       'productName': productName,
       'barcode': barcode,
       'unitPrice': unitPrice,
+      'costPrice': costPrice,
       'quantity': quantity,
       'unit': unit,
       'subtotal': subtotal,

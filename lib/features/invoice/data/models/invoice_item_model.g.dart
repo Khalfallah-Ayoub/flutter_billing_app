@@ -22,13 +22,14 @@ class InvoiceItemModelAdapter extends TypeAdapter<InvoiceItemModel> {
       subtotal: fields[6] as double,
       isPipe: fields[7] as bool,
       lengthCut: fields[8] as double?,
+      costPrice: (fields[9] as num?)?.toDouble() ?? 0.0,
     );
   }
 
   @override
   void write(BinaryWriter writer, InvoiceItemModel obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(10)
       ..writeByte(0)
       ..write(obj.productId)
       ..writeByte(1)
@@ -46,7 +47,9 @@ class InvoiceItemModelAdapter extends TypeAdapter<InvoiceItemModel> {
       ..writeByte(7)
       ..write(obj.isPipe)
       ..writeByte(8)
-      ..write(obj.lengthCut);
+      ..write(obj.lengthCut)
+      ..writeByte(9)
+      ..write(obj.costPrice);
   }
 
   @override

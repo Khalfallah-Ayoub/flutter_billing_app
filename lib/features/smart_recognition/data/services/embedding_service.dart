@@ -23,6 +23,7 @@ class EmbeddingService {
   static const int _colorBins = 32;
 
   bool _initialized = false;
+  bool get isInitialized => _initialized;
 
   /// Lazy initialization
   Future<void> initialize() async {
