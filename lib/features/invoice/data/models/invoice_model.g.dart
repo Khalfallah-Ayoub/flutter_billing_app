@@ -30,13 +30,16 @@ class InvoiceModelAdapter extends TypeAdapter<InvoiceModel> {
       updatedAt: fields[14] as DateTime,
       notes: fields[15] as String?,
       paymentHistory: fields[16] != null ? (fields[16] as List).cast<PaymentRecordModel>() : const [],
+      craftsmanId: fields[17] as String?,
+      craftsmanName: fields[18] as String?,
+      returnIds: fields[19] != null ? (fields[19] as List).cast<String>() : const [],
     );
   }
 
   @override
   void write(BinaryWriter writer, InvoiceModel obj) {
     writer
-      ..writeByte(17)
+      ..writeByte(20)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -70,7 +73,13 @@ class InvoiceModelAdapter extends TypeAdapter<InvoiceModel> {
       ..writeByte(15)
       ..write(obj.notes)
       ..writeByte(16)
-      ..write(obj.paymentHistory);
+      ..write(obj.paymentHistory)
+      ..writeByte(17)
+      ..write(obj.craftsmanId)
+      ..writeByte(18)
+      ..write(obj.craftsmanName)
+      ..writeByte(19)
+      ..write(obj.returnIds);
   }
 
   @override

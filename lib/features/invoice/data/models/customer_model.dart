@@ -29,6 +29,14 @@ class CustomerModel extends Customer {
   @override
   final DateTime createdAt;
 
+  @HiveField(6)
+  @override
+  final String? craftsmanId;
+
+  @HiveField(7)
+  @override
+  final String? craftsmanName;
+
   const CustomerModel({
     required this.id,
     required this.name,
@@ -36,6 +44,8 @@ class CustomerModel extends Customer {
     this.address,
     this.notes,
     required this.createdAt,
+    this.craftsmanId,
+    this.craftsmanName,
   }) : super(
           id: id,
           name: name,
@@ -43,6 +53,8 @@ class CustomerModel extends Customer {
           address: address,
           notes: notes,
           createdAt: createdAt,
+          craftsmanId: craftsmanId,
+          craftsmanName: craftsmanName,
         );
 
   factory CustomerModel.fromEntity(Customer entity) {
@@ -53,6 +65,8 @@ class CustomerModel extends Customer {
       address: entity.address,
       notes: entity.notes,
       createdAt: entity.createdAt,
+      craftsmanId: entity.craftsmanId,
+      craftsmanName: entity.craftsmanName,
     );
   }
 
@@ -64,6 +78,8 @@ class CustomerModel extends Customer {
       address: address,
       notes: notes,
       createdAt: createdAt,
+      craftsmanId: craftsmanId,
+      craftsmanName: craftsmanName,
     );
   }
 
@@ -74,6 +90,8 @@ class CustomerModel extends Customer {
       phone: map['phone'] as String? ?? '',
       address: map['address'] as String?,
       notes: map['notes'] as String?,
+      craftsmanId: map['craftsmanId'] as String?,
+      craftsmanName: map['craftsmanName'] as String?,
       createdAt: map['createdAt'] != null
           ? DateTime.parse(map['createdAt'] as String)
           : DateTime.now(),
@@ -87,6 +105,8 @@ class CustomerModel extends Customer {
       'phone': phone,
       'address': address,
       'notes': notes,
+      'craftsmanId': craftsmanId,
+      'craftsmanName': craftsmanName,
       'createdAt': createdAt.toIso8601String(),
     };
   }

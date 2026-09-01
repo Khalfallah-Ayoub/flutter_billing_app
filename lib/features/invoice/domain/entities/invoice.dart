@@ -26,6 +26,9 @@ class Invoice extends Equatable {
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? notes;
+  final String? craftsmanId;   // حرفي مسؤول عن هذه الفاتورة
+  final String? craftsmanName;
+  final List<String> returnIds; // IDs of linked ReturnInvoices
 
   const Invoice({
     required this.id,
@@ -45,6 +48,9 @@ class Invoice extends Equatable {
     required this.createdAt,
     required this.updatedAt,
     this.notes,
+    this.craftsmanId,
+    this.craftsmanName,
+    this.returnIds = const [],
   });
 
   bool get isPaid => paymentStatus == PaymentStatus.paid;
@@ -68,6 +74,9 @@ class Invoice extends Equatable {
     DateTime? createdAt,
     DateTime? updatedAt,
     String? notes,
+    String? craftsmanId,
+    String? craftsmanName,
+    List<String>? returnIds,
   }) {
     return Invoice(
       id: id ?? this.id,
@@ -87,6 +96,9 @@ class Invoice extends Equatable {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       notes: notes ?? this.notes,
+      craftsmanId: craftsmanId ?? this.craftsmanId,
+      craftsmanName: craftsmanName ?? this.craftsmanName,
+      returnIds: returnIds ?? this.returnIds,
     );
   }
 
@@ -109,5 +121,8 @@ class Invoice extends Equatable {
         createdAt,
         updatedAt,
         notes,
+        craftsmanId,
+        craftsmanName,
+        returnIds,
       ];
 }

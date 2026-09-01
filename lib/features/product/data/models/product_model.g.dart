@@ -39,13 +39,14 @@ class ProductModelAdapter extends TypeAdapter<ProductModel> {
       description: fields[19] as String?,
       usageInstructions: fields[20] as String?,
       costPrice: (fields[21] as num?)?.toDouble() ?? 0.0,
+      pHash: fields[22] as int?,
     );
   }
 
   @override
   void write(BinaryWriter writer, ProductModel obj) {
     writer
-      ..writeByte(22)
+      ..writeByte(23)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -89,7 +90,9 @@ class ProductModelAdapter extends TypeAdapter<ProductModel> {
       ..writeByte(20)
       ..write(obj.usageInstructions)
       ..writeByte(21)
-      ..write(obj.costPrice);
+      ..write(obj.costPrice)
+      ..writeByte(22)
+      ..write(obj.pHash);
   }
 
   @override

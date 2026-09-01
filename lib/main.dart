@@ -13,6 +13,8 @@ import 'features/settings/presentation/bloc/printer_event.dart';
 import 'features/invoice/presentation/bloc/invoice_bloc.dart';
 import 'features/invoice/presentation/bloc/customer_bloc.dart';
 import 'features/expense/presentation/bloc/expense_bloc.dart';
+import 'features/craftsman/presentation/bloc/craftsman_bloc.dart';
+import 'features/returns/presentation/bloc/return_bloc.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -81,6 +83,10 @@ class MyApp extends StatelessWidget {
             create: (context) => CustomerBloc()..add(LoadCustomersEvent())),
         BlocProvider<ExpenseBloc>(
             create: (context) => ExpenseBloc()..add(LoadExpensesEvent())),
+        BlocProvider<CraftsmanBloc>(
+            create: (context) => CraftsmanBloc()..add(LoadCraftsmenEvent())),
+        BlocProvider<ReturnBloc>(
+            create: (context) => ReturnBloc()..add(LoadReturnsEvent())),
       ],
       child: BlocBuilder<ThemeCubit, ThemeMode>(
         builder: (context, themeMode) {

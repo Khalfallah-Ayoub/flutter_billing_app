@@ -17,6 +17,7 @@ class Product extends Equatable {
   final List<String> imagePaths;
   final List<double>? embedding;
   final String? ocrText;
+  final int? pHash; // 64-bit perceptual hash for fast visual comparison
 
   // Pipe Management fields
   final bool isPipe;
@@ -45,6 +46,7 @@ class Product extends Equatable {
     this.imagePaths = const [],
     this.embedding,
     this.ocrText,
+    this.pHash,
     this.isPipe = false,
     this.pipeType,
     this.fullLength,
@@ -81,6 +83,7 @@ class Product extends Equatable {
     List<String>? imagePaths,
     List<double>? embedding,
     String? ocrText,
+    int? pHash,
     bool? isPipe,
     String? pipeType,
     double? fullLength,
@@ -105,6 +108,7 @@ class Product extends Equatable {
       imagePaths: imagePaths ?? this.imagePaths,
       embedding: embedding ?? this.embedding,
       ocrText: ocrText ?? this.ocrText,
+      pHash: pHash ?? this.pHash,
       isPipe: isPipe ?? this.isPipe,
       pipeType: pipeType ?? this.pipeType,
       fullLength: fullLength ?? this.fullLength,
@@ -132,6 +136,7 @@ class Product extends Equatable {
         imagePaths,
         embedding,
         ocrText,
+        pHash,
         isPipe,
         pipeType,
         fullLength,

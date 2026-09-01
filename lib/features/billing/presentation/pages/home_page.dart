@@ -165,7 +165,12 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final screenH = MediaQuery.of(context).size.height;
+    final keyboardH = MediaQuery.of(context).viewInsets.bottom;
+    final keyboardVisible = keyboardH > 100;
+
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       body: BlocListener<BillingBloc, BillingState>(
         listenWhen: (previous, current) =>
             previous.error != current.error && current.error != null,
@@ -180,30 +185,30 @@ class _HomePageState extends State<HomePage> {
             );
           }
         },
-        child: Stack(
+        child: Column(
           children: [
-            // SCANNER VIEW (TOP 50%)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: MediaQuery.of(context).size.height * 0.4,
+            // SCANNER — hidden when keyboard is visible or search is open
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              height: (_isSearchOpen && keyboardVisible)
+                  ? 0
+                  : (_isSearchOpen
+                      ? screenH * 0.18
+                      : screenH * 0.4),
               child: _buildScannerSection(),
             ),
 
-            // BOTTOM PANEL (BOTTOM 50% + OVERLAP)
-            Positioned(
-              top: (MediaQuery.of(context).size.height * 0.4) - 24, // overlap
-              left: 0,
-              right: 0,
-              bottom: 0,
+            // BOTTOM PANEL fills the rest
+            Expanded(
               child: _buildBottomPanel(),
             ),
           ],
         ),
       ),
-      bottomSheet:
-          BlocBuilder<BillingBloc, BillingState>(builder: (context, state) {
+      bottomSheet: BlocBuilder<BillingBloc, BillingState>(
+          builder: (context, state) {
+        if (_isSearchOpen) return const SizedBox.shrink();
         return PrimaryButton(
           onPressed: state.cartItems.isEmpty
               ? null
@@ -248,6 +253,15 @@ class _HomePageState extends State<HomePage> {
                   onPressed: () async {
                     _scannerController.stop();
                     await context.push('/financial-hub');
+                    if (_isCameraOn && mounted) _scannerController.start();
+                  },
+                ),
+                _buildOverlayButton(
+                  icon: Icons.engineering,
+                  color: Colors.teal.shade700,
+                  onPressed: () async {
+                    _scannerController.stop();
+                    await context.push('/craftsmen');
                     if (_isCameraOn && mounted) _scannerController.start();
                   },
                 ),
@@ -520,27 +534,31 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildBottomPanel() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: const [
-          BoxShadow(
-              color: Colors.black26, blurRadius: 15, offset: Offset(0, -5))
-        ],
-      ),
-      child: Column(
-        children: [
-          // Drag handle indicator
-          Container(
-            width: 48,
-            height: 4,
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.grey.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(2),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.translucent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: const [
+            BoxShadow(
+                color: Colors.black26, blurRadius: 15, offset: Offset(0, -5))
+          ],
+        ),
+        child: Column(
+          children: [
+            // Drag handle indicator
+            Container(
+              width: 48,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-          ),
+
 
           // Quick Navigation — Specialty Shortcuts Only
           SizedBox(
@@ -737,6 +755,7 @@ class _HomePageState extends State<HomePage> {
             ]),
           ),
         ],
+        ),
       ),
     );
   }
@@ -745,55 +764,87 @@ class _HomePageState extends State<HomePage> {
     final theme = Theme.of(context);
     final cardColor = theme.cardTheme.color ?? theme.colorScheme.surface;
     final borderColor = theme.dividerColor.withValues(alpha: 0.3);
+    final screenH = MediaQuery.of(context).size.height;
+    final keyboardH = MediaQuery.of(context).viewInsets.bottom;
+    final maxResultsH = (screenH - keyboardH - 220).clamp(120.0, 380.0);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Search input
           Container(
             decoration: BoxDecoration(
               color: cardColor,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: borderColor),
+              border: Border.all(
+                color: _searchController.text.isNotEmpty
+                    ? AppTheme.primaryColor.withValues(alpha: 0.5)
+                    : borderColor,
+                width: _searchController.text.isNotEmpty ? 1.5 : 1,
+              ),
             ),
             child: TextField(
               controller: _searchController,
               onChanged: _onSearchChanged,
               autofocus: true,
-              style: TextStyle(fontSize: 14, color: theme.colorScheme.onSurface),
+              textInputAction: TextInputAction.search,
+              style: TextStyle(fontSize: 15, color: theme.colorScheme.onSurface),
               decoration: InputDecoration(
-                hintText: 'بحث بالاسم، الماركة، الباركود...',
+                hintText: '\u0628\u062d\u062b: \u0627\u0633\u0645\u060c \u0641\u0626\u0629\u060c \u0645\u0627\u0631\u0643\u0629\u060c \u0628\u0627\u0631\u0643\u0648\u062f...',
                 hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-                prefixIcon: Icon(Icons.search, color: Colors.grey[400], size: 20),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: _searchResults.isNotEmpty ? AppTheme.primaryColor : Colors.grey[400],
+                  size: 22,
+                ),
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_searchResults.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(right: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryColor,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${_searchResults.length}',
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    if (_searchController.text.isNotEmpty)
+                      IconButton(
                         icon: Icon(Icons.clear, color: Colors.grey[400], size: 18),
                         onPressed: () {
                           _searchController.clear();
                           _onSearchChanged('');
                         },
-                      )
-                    : null,
+                      ),
+                  ],
+                ),
                 border: InputBorder.none,
                 contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
             ),
           ),
-
-          // Search results
-          if (_searchResults.isNotEmpty) ..._buildSearchResults(),
-
-          // No results message
+          if (_searchResults.isNotEmpty) ..._buildSearchResults(maxHeight: maxResultsH),
           if (_searchController.text.isNotEmpty && _searchResults.isEmpty)
             Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                'لم يتم العثور على "${_searchController.text}" — جرب كلمة قريبة',
-                style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                textAlign: TextAlign.center,
+              padding: const EdgeInsets.only(top: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.search_off, size: 16, color: Colors.grey),
+                  const SizedBox(width: 6),
+                  Text(
+                    '\u0644\u0627 \u0646\u062a\u0627\u0626\u062c \u0644\u0640 "${_searchController.text}"',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  ),
+                ],
               ),
             ),
         ],
@@ -801,7 +852,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  List<Widget> _buildSearchResults() {
+  List<Widget> _buildSearchResults({double maxHeight = 260}) {
     final theme = Theme.of(context);
     final cardColor = theme.cardTheme.color ?? theme.colorScheme.surface;
     final borderColor = theme.dividerColor.withValues(alpha: 0.3);
@@ -810,7 +861,7 @@ class _HomePageState extends State<HomePage> {
     return [
       const SizedBox(height: 6),
       Container(
-        constraints: const BoxConstraints(maxHeight: 200),
+        constraints: BoxConstraints(maxHeight: maxHeight),
         decoration: BoxDecoration(
           color: cardColor,
           borderRadius: BorderRadius.circular(12),

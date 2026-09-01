@@ -12,7 +12,6 @@ import '../../features/smart_recognition/presentation/pages/smart_recognition_pa
 import '../../features/pipes/presentation/pages/pipe_list_page.dart';
 import '../../features/pipes/presentation/pages/add_edit_pipe_page.dart';
 import '../../features/pipes/presentation/pages/pipe_cutting_sale_page.dart';
-
 import '../../features/pipes/presentation/pages/pipe_categories_page.dart';
 import '../../features/ai_chat/presentation/pages/ai_chat_page.dart';
 import '../../features/invoice/presentation/pages/invoice_list_page.dart';
@@ -26,6 +25,10 @@ import '../../features/analytics/presentation/pages/financial_hub_page.dart';
 import '../../features/product/presentation/pages/category_colors_page.dart';
 import '../../features/specialty/presentation/pages/electrical_products_page.dart';
 import '../../features/specialty/presentation/pages/paint_products_page.dart';
+import '../../features/craftsman/presentation/pages/craftsman_list_page.dart';
+import '../../features/craftsman/presentation/pages/craftsman_detail_page.dart';
+import '../../features/craftsman/domain/entities/craftsman.dart';
+import '../../features/returns/presentation/pages/return_invoice_page.dart';
 
 final router = GoRouter(
   initialLocation: '/',
@@ -152,6 +155,26 @@ final router = GoRouter(
     GoRoute(
       path: '/paint-products',
       builder: (context, state) => const PaintProductsPage(),
+    ),
+    // ─── Craftsman ────────────────────────────────────────────
+    GoRoute(
+      path: '/craftsmen',
+      builder: (context, state) => const CraftsmanListPage(),
+    ),
+    GoRoute(
+      path: '/craftsman/:id',
+      builder: (context, state) {
+        final craftsman = state.extra as Craftsman;
+        return CraftsmanDetailPage(craftsman: craftsman);
+      },
+    ),
+    // ─── Returns ──────────────────────────────────────────────
+    GoRoute(
+      path: '/return/:invoiceId',
+      builder: (context, state) {
+        final invoice = state.extra as Invoice;
+        return ReturnInvoicePage(invoice: invoice);
+      },
     ),
   ],
 );

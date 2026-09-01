@@ -146,6 +146,13 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
           onPressed: () => context.pop(),
         ),
         actions: [
+          if (_invoice.remainingAmount > 0)
+            IconButton(
+              icon: const Icon(Icons.assignment_return_outlined),
+              tooltip: 'إرجاع بضاعة',
+              color: Colors.orange,
+              onPressed: () => context.push('/return/${_invoice.id}', extra: _invoice),
+            ),
           IconButton(
             icon: const Icon(Icons.print, color: AppTheme.primaryColor),
             tooltip: 'طباعة الفاتورة',

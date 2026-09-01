@@ -65,14 +65,17 @@ class RecognitionBloc extends Bloc<RecognitionEvent, RecognitionState> {
       final ocrWithBrand =
           ocrService.detectBrandFromProducts(ocrResult, allProducts);
 
-      // 4. Generate embedding (may be null on web or failure)
+      // 4. Generate embedding + pHash (may be null on web or failure)
       final embedding =
           await embeddingService.generateEmbedding(event.imagePath);
+      final pHash =
+          await embeddingService.generatePHash(event.imagePath);
 
-      // 5. Rank all products using multi-signal engine
+      // 5. Rank all products using multi-signal adaptive engine
       final rankedResults = rankingService.rankCandidates(
         ocrResult: ocrWithBrand,
         queryEmbedding: embedding,
+        queryPHash: pHash,
         allProducts: allProducts,
         topK: 5,
       );
@@ -133,12 +136,18 @@ class RecognitionBloc extends Bloc<RecognitionEvent, RecognitionState> {
 
         final ocrText = state.ocrResult?.fullText;
 
-        // Auto-generate embedding if product doesn't have one yet
+        // Auto-generate embedding + pHash if product doesn't have one yet
         List<double>? updatedEmbedding = existingModel.embedding;
+        int? updatedPHash = existingModel.pHash;
+
         if (updatedEmbedding == null || updatedEmbedding.isEmpty) {
           final imgPath = savedPath ?? event.imagePath;
           updatedEmbedding =
               await embeddingService.generateEmbedding(imgPath);
+        }
+        if (updatedPHash == null) {
+          final imgPath = savedPath ?? event.imagePath;
+          updatedPHash = await embeddingService.generatePHash(imgPath);
         }
 
         final updatedModel = ProductModel(
@@ -153,6 +162,7 @@ class RecognitionBloc extends Bloc<RecognitionEvent, RecognitionState> {
           size: existingModel.size,
           imagePaths: updatedPaths,
           embedding: updatedEmbedding,
+          pHash: updatedPHash,
           ocrText: ocrText ?? existingModel.ocrText,
         );
 
@@ -206,7 +216,9 @@ class RecognitionBloc extends Bloc<RecognitionEvent, RecognitionState> {
                 existingModel.embedding!.isEmpty)) {
           final embedding =
               await embeddingService.generateEmbedding(event.imagePath);
-          if (embedding != null) {
+          final pHash =
+              await embeddingService.generatePHash(event.imagePath);
+          if (embedding != null || pHash != null) {
             final updatedModel = ProductModel(
               id: existingModel.id,
               name: existingModel.name,
@@ -218,7 +230,8 @@ class RecognitionBloc extends Bloc<RecognitionEvent, RecognitionState> {
               brand: existingModel.brand,
               size: existingModel.size,
               imagePaths: existingModel.imagePaths,
-              embedding: embedding,
+              embedding: embedding ?? existingModel.embedding,
+              pHash: pHash ?? existingModel.pHash,
               ocrText: existingModel.ocrText,
             );
             await HiveDatabase.productBox

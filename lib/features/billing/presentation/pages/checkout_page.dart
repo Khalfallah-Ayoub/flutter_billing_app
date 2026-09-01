@@ -15,6 +15,8 @@ import '../../../invoice/presentation/bloc/invoice_bloc.dart';
 import '../../../invoice/data/services/invoice_pdf_service.dart';
 import '../../../invoice/data/services/invoice_service.dart';
 import '../../../shop/presentation/bloc/shop_bloc.dart';
+import '../../../craftsman/presentation/bloc/craftsman_bloc.dart';
+import '../../../craftsman/domain/entities/craftsman.dart';
 import '../bloc/billing_bloc.dart';
 
 class CheckoutPage extends StatefulWidget {
@@ -28,6 +30,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   final _uuid = const Uuid();
 
   Customer? _selectedCustomer;
+  Craftsman? _selectedCraftsman; // حرفي مرتبط بالعميل
   final TextEditingController _customerNameCtrl = TextEditingController(text: 'زبون عادي');
   final TextEditingController _customerPhoneCtrl = TextEditingController();
   final TextEditingController _paidAmountCtrl = TextEditingController();
@@ -115,23 +118,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
       paymentHistory: initialPaymentHistory,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
+      craftsmanId: _selectedCraftsman?.id,
+      craftsmanName: _selectedCraftsman?.name,
     );
 
-    // Save in InvoiceBloc & Hive
+    // Save invoice — NO automatic printing, user chooses in dialog
     context.read<InvoiceBloc>().add(AddInvoiceEvent(invoice));
 
-    // Also trigger printer if shop loaded
-    if (shopState is ShopLoaded) {
-      context.read<BillingBloc>().add(PrintReceiptEvent(
-            shopName: shopState.shop.name,
-            address1: shopState.shop.addressLine1,
-            address2: shopState.shop.addressLine2,
-            phone: shopState.shop.phoneNumber,
-            footer: shopState.shop.footerText,
-          ));
-    }
-
-    // Show Options Dialog
+    // Show post-save options dialog
     _showInvoiceCreatedOptionsDialog(invoice);
   }
 
@@ -199,13 +193,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
-                  child: TextButton(
+                  child: TextButton.icon(
                     onPressed: () {
                       Navigator.pop(dialogCtx);
                       context.read<BillingBloc>().add(ClearCartEvent());
                       context.go('/');
                     },
-                    child: const Text('بدء بيع جديد 🛒', style: TextStyle(fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.shopping_cart, size: 18),
+                    label: const Text('بيع جديد', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -356,8 +351,84 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                         prefixIcon: Icon(Icons.phone),
                                       ),
                                     ),
+                                    const SizedBox(height: 10),
+                                    // Craftsman picker
+                                    BlocBuilder<CraftsmanBloc, CraftsmanState>(
+                                      builder: (context, craftsmanState) {
+                                        if (craftsmanState.craftsmen.isEmpty) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        return Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text('الحرفي المسؤول (اختياري)',
+                                                style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                            const SizedBox(height: 6),
+                                            Container(
+                                              decoration: BoxDecoration(
+                                                border: Border.all(
+                                                  color: _selectedCraftsman != null
+                                                      ? AppTheme.primaryColor.withValues(alpha: 0.5)
+                                                      : Colors.grey.withValues(alpha: 0.3),
+                                                ),
+                                                borderRadius: BorderRadius.circular(10),
+                                              ),
+                                              child: DropdownButtonHideUnderline(
+                                                child: DropdownButton<Craftsman?>(
+                                                  value: _selectedCraftsman,
+                                                  isExpanded: true,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                                  hint: const Row(children: [
+                                                    Icon(Icons.engineering, size: 18, color: Colors.grey),
+                                                    SizedBox(width: 8),
+                                                    Text('لا يوجد حرفي',
+                                                        style: TextStyle(color: Colors.grey, fontSize: 14)),
+                                                  ]),
+                                                  items: [
+                                                    const DropdownMenuItem<Craftsman?>(
+                                                      value: null,
+                                                      child: Text('لا يوجد حرفي',
+                                                          style: TextStyle(color: Colors.grey)),
+                                                    ),
+                                                    ...craftsmanState.craftsmen.map((c) =>
+                                                        DropdownMenuItem<Craftsman?>(
+                                                          value: c,
+                                                          child: Row(children: [
+                                                            Icon(Icons.engineering, size: 16,
+                                                                color: AppTheme.primaryColor),
+                                                            const SizedBox(width: 8),
+                                                            Text('${c.name} (${c.specialty ?? ''})'),
+                                                          ]),
+                                                        )),
+                                                  ],
+                                                  onChanged: (c) =>
+                                                      setState(() => _selectedCraftsman = c),
+                                                ),
+                                              ),
+                                            ),
+                                            if (_selectedCraftsman != null)
+                                              Padding(
+                                                padding: const EdgeInsets.only(top: 6),
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.check_circle, size: 14,
+                                                        color: Colors.green[600]),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      'سيتم ربط هذه الفاتورة بالحرفي ${_selectedCraftsman!.name}',
+                                                      style: TextStyle(
+                                                          fontSize: 11, color: Colors.green[700]),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                          ],
+                                        );
+                                      },
+                                    ),
                                     const SizedBox(height: 16),
                                     const Text('اختر خيار الدفع:', style: TextStyle(fontWeight: FontWeight.bold)),
+
                                     const SizedBox(height: 8),
 
                                     // Payment Choice Options

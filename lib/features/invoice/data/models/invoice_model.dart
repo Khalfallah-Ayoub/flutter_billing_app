@@ -74,6 +74,18 @@ class InvoiceModel extends Invoice {
   @override
   final List<PaymentRecordModel> paymentHistory;
 
+  @HiveField(17)
+  @override
+  final String? craftsmanId;
+
+  @HiveField(18)
+  @override
+  final String? craftsmanName;
+
+  @HiveField(19)
+  @override
+  final List<String> returnIds;
+
   InvoiceModel({
     required this.id,
     required this.invoiceNumber,
@@ -92,6 +104,9 @@ class InvoiceModel extends Invoice {
     required this.createdAt,
     required this.updatedAt,
     this.notes,
+    this.craftsmanId,
+    this.craftsmanName,
+    this.returnIds = const [],
   }) : super(
           id: id,
           invoiceNumber: invoiceNumber,
@@ -110,6 +125,9 @@ class InvoiceModel extends Invoice {
           createdAt: createdAt,
           updatedAt: updatedAt,
           notes: notes,
+          craftsmanId: craftsmanId,
+          craftsmanName: craftsmanName,
+          returnIds: returnIds,
         );
 
   static PaymentStatus _parseStatus(String status) {
@@ -154,6 +172,9 @@ class InvoiceModel extends Invoice {
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
       notes: entity.notes,
+      craftsmanId: entity.craftsmanId,
+      craftsmanName: entity.craftsmanName,
+      returnIds: entity.returnIds,
     );
   }
 
@@ -176,6 +197,9 @@ class InvoiceModel extends Invoice {
       createdAt: createdAt,
       updatedAt: updatedAt,
       notes: notes,
+      craftsmanId: craftsmanId,
+      craftsmanName: craftsmanName,
+      returnIds: returnIds,
     );
   }
 }

@@ -79,6 +79,10 @@ class ProductModel extends Product {
   @HiveField(21)
   final double costPrice;
 
+  @override
+  @HiveField(22)
+  final int? pHash;
+
   const ProductModel({
     required this.id,
     required this.name,
@@ -93,6 +97,7 @@ class ProductModel extends Product {
     this.imagePaths = const [],
     this.embedding,
     this.ocrText,
+    this.pHash,
     this.isPipe = false,
     this.pipeType,
     this.fullLength,
@@ -116,6 +121,7 @@ class ProductModel extends Product {
           imagePaths: imagePaths,
           embedding: embedding,
           ocrText: ocrText,
+          pHash: pHash,
           isPipe: isPipe,
           pipeType: pipeType,
           fullLength: fullLength,
@@ -142,6 +148,7 @@ class ProductModel extends Product {
       imagePaths: product.imagePaths,
       embedding: product.embedding,
       ocrText: product.ocrText,
+      pHash: product.pHash,
       isPipe: product.isPipe,
       pipeType: product.pipeType,
       fullLength: product.fullLength,
@@ -169,6 +176,7 @@ class ProductModel extends Product {
       imagePaths: imagePaths,
       embedding: embedding,
       ocrText: ocrText,
+      pHash: pHash,
       isPipe: isPipe,
       pipeType: pipeType,
       fullLength: fullLength,
@@ -197,6 +205,7 @@ class ProductModel extends Product {
       'imagePaths': imagePaths,
       'embedding': embedding,
       'ocrText': ocrText,
+      'pHash': pHash,
       'isPipe': isPipe,
       'pipeType': pipeType,
       'fullLength': fullLength,
@@ -225,6 +234,7 @@ class ProductModel extends Product {
       imagePaths: (map['imagePaths'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       embedding: (map['embedding'] as List?)?.map((e) => (e as num).toDouble()).toList(),
       ocrText: map['ocrText'] as String?,
+      pHash: map['pHash'] as int?,
       isPipe: map['isPipe'] as bool? ?? false,
       pipeType: map['pipeType'] as String?,
       fullLength: (map['fullLength'] as num?)?.toDouble(),

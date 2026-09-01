@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import '../../domain/entities/invoice.dart';
 import '../../../../core/data/hive_database.dart';
 import '../../../shop/data/models/shop_model.dart';
+import '../../../returns/domain/entities/return_invoice.dart';
 
 class InvoicePdfService {
   /// Generate a PDF Document for an invoice
@@ -320,5 +321,116 @@ class InvoicePdfService {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     }
+  }
+
+  /// Generate and print a Return Invoice PDF (وصل إرجاع)
+  static Future<void> printReturnInvoice(ReturnInvoice ret) async {
+    final pdfBytes = await _generateReturnPdf(ret);
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdfBytes,
+      name: 'Return-${ret.returnNumber}.pdf',
+    );
+  }
+
+  static Future<Uint8List> _generateReturnPdf(ReturnInvoice ret) async {
+    final pdf = pw.Document();
+    ShopModel? shopInfo;
+    try { shopInfo = HiveDatabase.shopBox.get('info'); } catch (_) {}
+
+    final shopName = shopInfo?.name ?? 'المتجر';
+    final arabicFont = await PdfGoogleFonts.cairoMedium();
+    final arabicFontBold = await PdfGoogleFonts.cairoBold();
+    final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        textDirection: pw.TextDirection.rtl,
+        theme: pw.ThemeData.withFont(base: arabicFont, bold: arabicFontBold),
+        build: (ctx) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(shopName,
+                    style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.blue900)),
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.red100,
+                    borderRadius: pw.BorderRadius.circular(6),
+                  ),
+                  child: pw.Text('وصل إرجاع بضاعة',
+                      style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.red900)),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 10),
+            pw.Divider(color: PdfColors.grey400),
+            pw.SizedBox(height: 10),
+            pw.Container(
+              padding: const pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(color: PdfColors.grey100,
+                  borderRadius: pw.BorderRadius.circular(6)),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('رقم الإرجاع: ${ret.returnNumber}',
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                  pw.Text('الفاتورة الأصلية: ${ret.originalInvoiceNumber}'),
+                  pw.Text('الزبون: ${ret.customerName}'),
+                  if (ret.craftsmanName != null)
+                    pw.Text('الحرفي: ${ret.craftsmanName}'),
+                  pw.Text('التاريخ: ${dateFormat.format(ret.createdAt)}'),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 14),
+            pw.TableHelper.fromTextArray(
+              context: ctx,
+              border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.red50),
+              headerHeight: 26,
+              cellHeight: 22,
+              cellAlignment: pw.Alignment.centerRight,
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+              cellStyle: const pw.TextStyle(fontSize: 10),
+              headers: ['المنتج', 'الكمية', 'السعر', 'الإجمالي'],
+              data: ret.items.map((item) => [
+                item.productName,
+                '${item.quantity} ${item.unit}',
+                '${item.unitPrice.toStringAsFixed(2)} دج',
+                '${item.subtotal.toStringAsFixed(2)} دج',
+              ]).toList(),
+            ),
+            pw.SizedBox(height: 12),
+            pw.Align(
+              alignment: pw.Alignment.centerLeft,
+              child: pw.Container(
+                padding: const pw.EdgeInsets.all(10),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.red300),
+                  borderRadius: pw.BorderRadius.circular(6),
+                ),
+                child: pw.Text(
+                  'إجمالي الإرجاع: ${ret.totalReturnAmount.toStringAsFixed(2)} دج',
+                  style: pw.TextStyle(
+                    fontSize: 13, fontWeight: pw.FontWeight.bold, color: PdfColors.red900),
+                ),
+              ),
+            ),
+            if (ret.notes != null) ...[
+              pw.SizedBox(height: 10),
+              pw.Text('ملاحظات: ${ret.notes}',
+                  style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+            ],
+          ],
+        ),
+      ),
+    );
+    return pdf.save();
   }
 }
