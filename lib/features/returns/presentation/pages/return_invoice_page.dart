@@ -6,6 +6,7 @@ import '../../../../core/utils/app_constants.dart';
 import '../../../invoice/domain/entities/invoice.dart';
 import '../../../invoice/domain/entities/invoice_item.dart';
 import '../../domain/entities/return_invoice.dart';
+import '../../../invoice/presentation/bloc/invoice_bloc.dart';
 import '../bloc/return_bloc.dart';
 import '../../../invoice/data/services/invoice_pdf_service.dart';
 
@@ -22,6 +23,7 @@ class _ReturnInvoicePageState extends State<ReturnInvoicePage> {
   /// qty[i] = how many units of item[i] the customer is returning
   late List<double> _returnQty;
   final _notesCtrl = TextEditingController();
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -46,6 +48,7 @@ class _ReturnInvoicePageState extends State<ReturnInvoicePage> {
   bool get _hasAnyReturn => _returnQty.any((q) => q > 0);
 
   void _submit() {
+    if (_isSubmitting) return; // Prevent double-tap
     if (!_hasAnyReturn) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -55,6 +58,23 @@ class _ReturnInvoicePageState extends State<ReturnInvoicePage> {
       );
       return;
     }
+
+    // Validate returned qty vs item.quantity (which already reflects prior returns)
+    for (int i = 0; i < widget.invoice.items.length; i++) {
+      if (_returnQty[i] > widget.invoice.items[i].quantity) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'الكمية المرجعة لـ "${widget.invoice.items[i].productName}" (${_returnQty[i]}) تتجاوز الكمية المتوفرة (${widget.invoice.items[i].quantity})',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+    }
+
+    setState(() => _isSubmitting = true);
 
     final items = <ReturnItem>[];
     for (int i = 0; i < widget.invoice.items.length; i++) {
@@ -66,7 +86,7 @@ class _ReturnInvoicePageState extends State<ReturnInvoicePage> {
           quantity: _returnQty[i],
           unitPrice: inv.unitPrice,
           subtotal: _returnQty[i] * inv.unitPrice,
-          unit: inv.unit ?? 'قطعة',
+          unit: inv.unit.isEmpty ? 'قطعة' : inv.unit,
         ));
       }
     }
@@ -90,10 +110,25 @@ class _ReturnInvoicePageState extends State<ReturnInvoicePage> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => BlocListener<ReturnBloc, ReturnBlocState>(
-        listenWhen: (prev, curr) => curr.lastAdded != null && prev.lastAdded != curr.lastAdded,
+        listenWhen: (prev, curr) =>
+            (curr.lastAdded != null && prev.lastAdded != curr.lastAdded) ||
+            (curr.error != null && prev.error != curr.error),
         listener: (_, state) {
-          if (state.lastAdded != null) {
+          if (state.error != null) {
+            // Error: close loading dialog, show error, reset submit flag
             Navigator.pop(ctx);
+            if (mounted) setState(() => _isSubmitting = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.error!),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          } else if (state.lastAdded != null) {
+            // Success: reload invoices then close
+            context.read<InvoiceBloc>().add(LoadInvoicesEvent());
+            if (mounted) setState(() => _isSubmitting = false);
           }
         },
         child: AlertDialog(
@@ -149,6 +184,7 @@ class _ReturnInvoicePageState extends State<ReturnInvoicePage> {
                           child: ElevatedButton.icon(
                             onPressed: () {
                               Navigator.pop(ctx);
+                              context.pop(true);
                               InvoicePdfService.printReturnInvoice(state.lastAdded!);
                             },
                             icon: const Icon(Icons.print, color: Colors.white),
@@ -164,7 +200,7 @@ class _ReturnInvoicePageState extends State<ReturnInvoicePage> {
                           child: OutlinedButton.icon(
                             onPressed: () {
                               Navigator.pop(ctx);
-                              context.pop();
+                              context.pop(true);
                             },
                             icon: const Icon(Icons.close),
                             label: const Text('إغلاق'),
@@ -351,7 +387,7 @@ class _ReturnInvoicePageState extends State<ReturnInvoicePage> {
 }
 
 // ─── Return Item Tile ─────────────────────────────────────────────
-class _ReturnItemTile extends StatelessWidget {
+class _ReturnItemTile extends StatefulWidget {
   final InvoiceItem item;
   final double returnQty;
   final ValueChanged<double> onChanged;
@@ -363,11 +399,51 @@ class _ReturnItemTile extends StatelessWidget {
   });
 
   @override
+  State<_ReturnItemTile> createState() => _ReturnItemTileState();
+}
+
+class _ReturnItemTileState extends State<_ReturnItemTile> {
+  late TextEditingController _meterCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _meterCtrl = TextEditingController(
+      text: widget.returnQty > 0 ? widget.returnQty.toString() : '',
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _ReturnItemTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Sync controller when parent changes qty (e.g. via slider)
+    if (oldWidget.returnQty != widget.returnQty) {
+      final cursorPos = _meterCtrl.selection;
+      _meterCtrl.text = widget.returnQty > 0 ? widget.returnQty.toString() : '';
+      // Try to restore cursor, but don't crash if out of range
+      if (_meterCtrl.text.isNotEmpty && cursorPos.isValid) {
+        try {
+          _meterCtrl.selection = cursorPos;
+        } catch (_) {}
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _meterCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isSelected = returnQty > 0;
-    final maxQty = item.quantity;
-    final unit = item.unit ?? 'قطعة';
+    final isSelected = widget.returnQty > 0;
+    final maxQty = widget.item.quantity;
+    final isPipe = widget.item.isPipe;
+    final unit = widget.item.unit.isEmpty ? 'قطعة' : widget.item.unit;
+    // For pipes: step by 0.5m. For products: step by 1
+    final step = isPipe ? 0.5 : 1.0;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -389,18 +465,35 @@ class _ReturnItemTile extends StatelessWidget {
         children: [
           Row(
             children: [
+              // Product icon
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: (isPipe ? Colors.blue : AppTheme.primaryColor)
+                      .withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isPipe ? Icons.architecture : Icons.shopping_bag,
+                  color: isPipe ? Colors.blue : AppTheme.primaryColor,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item.productName,
+                    Text(widget.item.productName,
                         style: const TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 14),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 2),
                     Text(
-                      'تم شراؤه: ${item.quantity} $unit  ×  ${AppConstants.formatPrice(item.unitPrice)}',
+                      isPipe
+                          ? 'تم شراؤه: ${widget.item.quantity} متر × ${AppConstants.formatPrice(widget.item.unitPrice)}/متر'
+                          : 'تم شراؤه: ${widget.item.quantity.toInt()} $unit × ${AppConstants.formatPrice(widget.item.unitPrice)}',
                       style: TextStyle(color: Colors.grey[500], fontSize: 12),
                     ),
                   ],
@@ -415,7 +508,7 @@ class _ReturnItemTile extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    AppConstants.formatPrice(returnQty * item.unitPrice),
+                    AppConstants.formatPrice(widget.returnQty * widget.item.unitPrice),
                     style: const TextStyle(
                         color: Colors.green,
                         fontWeight: FontWeight.bold,
@@ -425,52 +518,169 @@ class _ReturnItemTile extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              // Decrease
-              _QtyBtn(
-                icon: Icons.remove,
-                color: Colors.red,
-                onTap: returnQty > 0
-                    ? () => onChanged((returnQty - 1).clamp(0, maxQty))
-                    : null,
-              ),
-              // Slider
-              Expanded(
-                child: Slider(
-                  value: returnQty,
-                  min: 0,
-                  max: maxQty,
-                  divisions: maxQty > 0 ? maxQty.round() : 1,
-                  activeColor: Colors.green,
-                  inactiveColor: Colors.grey.withValues(alpha: 0.2),
-                  label: '$returnQty $unit',
-                  onChanged: onChanged,
+
+          if (isPipe) ...[
+            // ─── Pipe: precise meter input with +/- 0.5m buttons ───
+            Row(
+              children: [
+                // Decrease by 0.5m
+                _QtyBtn(
+                  icon: Icons.remove,
+                  color: Colors.red,
+                  label: '-${step}م',
+                  onTap: widget.returnQty > 0
+                      ? () {
+                          final newQty = (widget.returnQty - step).clamp(0.0, maxQty);
+                          widget.onChanged(double.parse(newQty.toStringAsFixed(2)));
+                        }
+                      : null,
                 ),
-              ),
-              // Increase
-              _QtyBtn(
-                icon: Icons.add,
-                color: Colors.green,
-                onTap: returnQty < maxQty
-                    ? () => onChanged((returnQty + 1).clamp(0, maxQty))
-                    : null,
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 50,
-                child: Text(
-                  '$returnQty/$maxQty',
-                  textAlign: TextAlign.center,
+                const SizedBox(width: 8),
+                // Direct meter input
+                Expanded(
+                  child: TextField(
+                    controller: _meterCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: isSelected ? Colors.green : Colors.grey[600],
+                    ),
+                    decoration: InputDecoration(
+                      hintText: '0',
+                      suffixText: 'متر',
+                      suffixStyle: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: isSelected ? Colors.green : Colors.grey.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Colors.green, width: 2),
+                      ),
+                      isDense: true,
+                    ),
+                    onChanged: (text) {
+                      final val = double.tryParse(text) ?? 0.0;
+                      final clamped = val.clamp(0.0, maxQty);
+                      widget.onChanged(double.parse(clamped.toStringAsFixed(2)));
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Increase by 0.5m
+                _QtyBtn(
+                  icon: Icons.add,
+                  color: Colors.green,
+                  label: '+${step}م',
+                  onTap: widget.returnQty < maxQty
+                      ? () {
+                          final newQty = (widget.returnQty + step).clamp(0.0, maxQty);
+                          widget.onChanged(double.parse(newQty.toStringAsFixed(2)));
+                        }
+                      : null,
+                ),
+                const SizedBox(width: 8),
+                // Max button
+                GestureDetector(
+                  onTap: () => widget.onChanged(maxQty),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(
+                      'الكل',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange[700],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // Progress bar showing returned vs total
+            Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: maxQty > 0 ? (widget.returnQty / maxQty) : 0,
+                      backgroundColor: Colors.grey.withValues(alpha: 0.15),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        isSelected ? Colors.green : Colors.grey,
+                      ),
+                      minHeight: 6,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${widget.returnQty}/${maxQty} متر',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.bold,
                     color: isSelected ? Colors.green : Colors.grey,
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ] else ...[
+            // ─── Regular product: integer slider ───
+            Row(
+              children: [
+                _QtyBtn(
+                  icon: Icons.remove,
+                  color: Colors.red,
+                  onTap: widget.returnQty > 0
+                      ? () => widget.onChanged((widget.returnQty - 1).clamp(0, maxQty))
+                      : null,
+                ),
+                Expanded(
+                  child: Slider(
+                    value: widget.returnQty,
+                    min: 0,
+                    max: maxQty,
+                    divisions: maxQty > 0 ? maxQty.round() : 1,
+                    activeColor: Colors.green,
+                    inactiveColor: Colors.grey.withValues(alpha: 0.2),
+                    label: '${widget.returnQty.toInt()} $unit',
+                    onChanged: (val) => widget.onChanged(val.roundToDouble()),
+                  ),
+                ),
+                _QtyBtn(
+                  icon: Icons.add,
+                  color: Colors.green,
+                  onTap: widget.returnQty < maxQty
+                      ? () => widget.onChanged((widget.returnQty + 1).clamp(0, maxQty))
+                      : null,
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 50,
+                  child: Text(
+                    '${widget.returnQty.toInt()}/${maxQty.toInt()}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: isSelected ? Colors.green : Colors.grey,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -481,31 +691,53 @@ class _QtyBtn extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback? onTap;
+  final String? label;
 
-  const _QtyBtn({required this.icon, required this.color, this.onTap});
+  const _QtyBtn({required this.icon, required this.color, this.onTap, this.label});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 32,
+        padding: label != null
+            ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
+            : null,
+        width: label != null ? null : 32,
         height: 32,
         decoration: BoxDecoration(
           color: onTap != null
               ? color.withValues(alpha: 0.1)
               : Colors.grey.withValues(alpha: 0.05),
-          shape: BoxShape.circle,
+          borderRadius: label != null ? BorderRadius.circular(8) : null,
+          shape: label != null ? BoxShape.rectangle : BoxShape.circle,
           border: Border.all(
             color: onTap != null
                 ? color.withValues(alpha: 0.4)
                 : Colors.grey.withValues(alpha: 0.2),
           ),
         ),
-        child: Icon(icon,
-            size: 16,
-            color: onTap != null ? color : Colors.grey.withValues(alpha: 0.4)),
+        child: label != null
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 14,
+                      color: onTap != null ? color : Colors.grey.withValues(alpha: 0.4)),
+                  const SizedBox(width: 2),
+                  Text(
+                    label!,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: onTap != null ? color : Colors.grey.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ],
+              )
+            : Icon(icon, size: 16,
+                color: onTap != null ? color : Colors.grey.withValues(alpha: 0.4)),
       ),
     );
   }
 }
+

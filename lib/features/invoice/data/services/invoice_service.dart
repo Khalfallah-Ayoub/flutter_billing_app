@@ -72,9 +72,20 @@ class InvoiceService {
 
   static String generateNextInvoiceNumber() {
     final box = HiveDatabase.invoiceBox;
-    final count = box.length + 1;
     final year = DateTime.now().year;
-    final formattedNum = count.toString().padLeft(4, '0');
-    return 'INV-$year-$formattedNum';
+    final prefix = 'INV-$year-';
+
+    // Find the true max sequential number to avoid collisions on edit or delete
+    int maxNum = 0;
+    for (final model in box.values) {
+      final num = model.invoiceNumber;
+      if (num.startsWith(prefix)) {
+        final suffix = num.substring(prefix.length);
+        final parsed = int.tryParse(suffix);
+        if (parsed != null && parsed > maxNum) maxNum = parsed;
+      }
+    }
+    final formattedNum = (maxNum + 1).toString().padLeft(4, '0');
+    return '$prefix$formattedNum';
   }
 }

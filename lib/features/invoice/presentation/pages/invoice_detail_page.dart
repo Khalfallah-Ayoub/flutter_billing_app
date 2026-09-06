@@ -6,7 +6,9 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/entities/invoice.dart';
 import '../bloc/invoice_bloc.dart';
+import '../../../billing/presentation/bloc/billing_bloc.dart';
 import '../../data/services/invoice_pdf_service.dart';
+import '../../../returns/presentation/bloc/return_bloc.dart';
 
 class InvoiceDetailPage extends StatefulWidget {
   final Invoice invoice;
@@ -27,7 +29,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
   }
 
   void _showPayDebtDialog() {
-    final amountController = TextEditingController(text: _invoice.remainingAmount.toStringAsFixed(0));
+    final amountController = TextEditingController(text: _invoice.remainingAmount.toStringAsFixed(2));
     final noteController = TextEditingController(text: 'تسديد دفعة من الدين');
 
     showDialog(
@@ -138,7 +140,15 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
       statusText = 'دين جزئي ⚠️';
     }
 
-    return Scaffold(
+    return BlocListener<InvoiceBloc, InvoiceState>(
+      listenWhen: (prev, curr) => prev.allInvoices != curr.allInvoices,
+      listener: (context, state) {
+        final updated = state.allInvoices.where((i) => i.id == _invoice.id).firstOrNull;
+        if (updated != null && mounted) {
+          setState(() => _invoice = updated);
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: Text('تفاصيل الفاتورة ${_invoice.invoiceNumber}'),
         leading: IconButton(
@@ -146,12 +156,25 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
           onPressed: () => context.pop(),
         ),
         actions: [
-          if (_invoice.remainingAmount > 0)
-            IconButton(
+          IconButton(
+            icon: const Icon(Icons.edit, color: Colors.amber),
+            tooltip: 'تعديل الفاتورة في سلة المشتريات',
+            onPressed: () {
+              context.read<BillingBloc>().add(LoadInvoiceForEditEvent(_invoice));
+              context.go('/');
+            },
+          ),
+          IconButton(
               icon: const Icon(Icons.assignment_return_outlined),
               tooltip: 'إرجاع بضاعة',
               color: Colors.orange,
-              onPressed: () => context.push('/return/${_invoice.id}', extra: _invoice),
+              onPressed: () async {
+                final result = await context.push('/return/${_invoice.id}', extra: _invoice);
+                if (result == true) {
+                  context.read<InvoiceBloc>().add(LoadInvoicesEvent());
+                  context.read<ReturnBloc>().add(LoadReturnsEvent());
+                }
+              },
             ),
           IconButton(
             icon: const Icon(Icons.print, color: AppTheme.primaryColor),
@@ -331,29 +354,40 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
             const SizedBox(height: 16),
 
             // Totals & Debt Breakdown Box
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    _buildRow('المجموع الصافي', '${_invoice.subtotal.toStringAsFixed(2)} دج'),
-                    if (_invoice.discount > 0)
-                      _buildRow('الخصم', '-${_invoice.discount.toStringAsFixed(2)} دج', isDiscount: true),
-                    const Divider(),
-                    _buildRow('المبلغ الإجمالي', '${_invoice.totalAmount.toStringAsFixed(2)} دج', isBold: true),
-                    _buildRow('المبلغ المدفوع', '${_invoice.paidAmount.toStringAsFixed(2)} دج', color: Colors.green),
-                    const Divider(),
-                    _buildRow(
-                      'المتبقي (الدين)',
-                      '${_invoice.remainingAmount.toStringAsFixed(2)} دج',
-                      isBold: true,
-                      color: _invoice.remainingAmount > 0 ? Colors.red : Colors.green,
+            BlocBuilder<ReturnBloc, ReturnBlocState>(
+              builder: (context, returnState) {
+                final relatedReturns = returnState.returns
+                    .where((r) => r.originalInvoiceId == _invoice.id)
+                    .toList();
+                final totalReturned = relatedReturns.fold<double>(0, (s, r) => s + r.totalReturnAmount);
+                
+                return Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        _buildRow('المجموع الأصلي', '${(_invoice.subtotal + totalReturned).toStringAsFixed(2)} دج'),
+                        if (_invoice.discount > 0)
+                          _buildRow('الخصم', '-${_invoice.discount.toStringAsFixed(2)} دج', isDiscount: true),
+                        if (totalReturned > 0)
+                          _buildRow('إجمالي المرجع', '-${totalReturned.toStringAsFixed(2)} دج', color: Colors.orange),
+                        const Divider(),
+                        _buildRow('الصافي', '${_invoice.totalAmount.toStringAsFixed(2)} دج', isBold: true),
+                        _buildRow('المبلغ المدفوع', '${_invoice.paidAmount.toStringAsFixed(2)} دج', color: Colors.green),
+                        const Divider(),
+                        _buildRow(
+                          'المتبقي (الدين)',
+                          '${_invoice.remainingAmount.toStringAsFixed(2)} دج',
+                          isBold: true,
+                          color: _invoice.remainingAmount > 0 ? Colors.red : Colors.green,
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 16),
 
@@ -455,10 +489,140 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                   ),
                 ),
               ),
+            // Return History Section
+            const SizedBox(height: 16),
+            BlocBuilder<ReturnBloc, ReturnBlocState>(
+              builder: (context, returnState) {
+                final relatedReturns = returnState.returns
+                    .where((r) => r.originalInvoiceId == _invoice.id)
+                    .toList();
+                if (relatedReturns.isEmpty) return const SizedBox.shrink();
+                
+                final totalReturned = relatedReturns.fold<double>(0, (s, r) => s + r.totalReturnAmount);
+                
+                return Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.assignment_return, color: Colors.orange, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              'سجل الإرجاعات (${relatedReturns.length})',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                'إجمالي المرجع: ${totalReturned.toStringAsFixed(2)} دج',
+                                style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        const Divider(height: 1),
+                        const SizedBox(height: 8),
+                        ...relatedReturns.map((ret) {
+                          final dateFormat = DateFormat('yyyy/MM/dd HH:mm');
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 12,
+                                          backgroundColor: Colors.orange.withValues(alpha: 0.15),
+                                          child: const Icon(Icons.undo, size: 14, color: Colors.orange),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              ret.returnNumber,
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                            ),
+                                            Text(
+                                              dateFormat.format(ret.createdAt),
+                                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                    Text(
+                                      '-${ret.totalReturnAmount.toStringAsFixed(2)} دج',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                        color: Colors.orange,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                // Show returned items
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 34, top: 4),
+                                  child: Column(
+                                    children: ret.items.map((item) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 2),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.subdirectory_arrow_left, size: 14, color: Colors.grey[400]),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              '${item.productName} × ${item.quantity} ${item.unit}',
+                                              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                                            ),
+                                          ),
+                                          Text(
+                                            '${item.subtotal.toStringAsFixed(2)} دج',
+                                            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                                          ),
+                                        ],
+                                      ),
+                                    )).toList(),
+                                  ),
+                                ),
+                                if (ret.notes != null && ret.notes!.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 34, top: 4),
+                                    child: Text(
+                                      'ملاحظة: ${ret.notes}',
+                                      style: TextStyle(fontSize: 11, color: Colors.grey[500], fontStyle: FontStyle.italic),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
           ],
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildRow(String label, String value,

@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'config/routes/app_routes.dart';
 import 'core/data/hive_database.dart';
 import 'core/service_locator.dart' as di;
@@ -18,6 +20,11 @@ import 'features/returns/presentation/bloc/return_bloc.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Prevent Google Fonts from making HTTP requests at runtime.
+  // On web this avoids the "Failed to fetch" font error that causes white screen.
+  // On mobile it uses the bundled font or system fallback.
+  GoogleFonts.config.allowRuntimeFetching = false;
 
   // Custom error UI instead of white screen if any widget fails
   ErrorWidget.builder = (FlutterErrorDetails details) {

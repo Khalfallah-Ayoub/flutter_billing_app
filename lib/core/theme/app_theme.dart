@@ -8,14 +8,29 @@ class AppTheme {
   static const Color surfaceColor = Colors.white;
   static const Color errorColor = Color(0xFFB00020);
 
- static final TextTheme textTheme = GoogleFonts.ibmPlexSansTextTheme().copyWith(
-  bodyLarge: GoogleFonts.ibmPlexSans(
-    fontSize: 15,
-    fontWeight: FontWeight.w500,
-    color: Colors.black,
-  ),
- 
-);
+  /// Safe text theme — runtime fetching is disabled in main(),
+  /// so GoogleFonts uses bundled/system fonts only.
+  static TextTheme get textTheme {
+    try {
+      return GoogleFonts.ibmPlexSansTextTheme().copyWith(
+        bodyLarge: GoogleFonts.ibmPlexSans(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+          color: Colors.black,
+        ),
+      );
+    } catch (_) {
+      // Fallback to default Material text theme if Google Fonts fails
+      return const TextTheme(
+        bodyLarge: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+          color: Colors.black,
+        ),
+      );
+    }
+  }
+
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_constants.dart';
@@ -84,24 +85,228 @@ class _ElectricalProductsPageState extends State<ElectricalProductsPage> {
   }
 
   void _addToCart(Product product) {
-    context.read<BillingBloc>().add(AddProductToCartEvent(product));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text('${product.name} أُضيف للسلة',
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-            ),
-          ],
+    if (product.isPipe) {
+      // Wire/cable sold by meter — show cutting modal
+      _showMeterCuttingSheet(product);
+    } else {
+      // Regular product — add directly
+      context.read<BillingBloc>().add(AddProductToCartEvent(product));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('${product.name} أُضيف للسلة',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.green.shade700,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 700),
+          margin: const EdgeInsets.only(bottom: 12, left: 12, right: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
-        backgroundColor: Colors.green.shade700,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(milliseconds: 700),
-        margin: const EdgeInsets.only(bottom: 12, left: 12, right: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      );
+    }
+  }
+
+  void _showMeterCuttingSheet(Product product) {
+    double meters = 1.0;
+    final pricePerMeter = product.calculatedPricePerMeter;
+    final fullLength = product.fullLength ?? 100.0;
+    final presets = [1.0, 2.0, 5.0, 10.0, 20.0, 50.0, fullLength];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (sheetCtx, setSheetState) {
+          final total = meters * pricePerMeter;
+          return Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.fromLTRB(
+                20, 20, 20, MediaQuery.of(sheetCtx).viewInsets.bottom + 20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Header
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.cable, color: Colors.orange, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(product.name,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            Text(
+                              '${AppConstants.formatPrice(pricePerMeter)}/متر — اللفة: ${fullLength.toStringAsFixed(0)} متر',
+                              style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(sheetCtx),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Quick meter presets
+                  const Text('اختيار سريع:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: presets.map((m) {
+                      final isSelected = meters == m;
+                      final isFullRoll = m == fullLength;
+                      return ChoiceChip(
+                        label: Text(
+                          isFullRoll ? 'لفة كاملة (${m.toStringAsFixed(0)}م)' : '${m.toStringAsFixed(0)} متر',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isSelected ? Colors.white : null,
+                            fontWeight: isFullRoll ? FontWeight.bold : null,
+                          ),
+                        ),
+                        selected: isSelected,
+                        selectedColor: isFullRoll ? Colors.orange : AppTheme.primaryColor,
+                        onSelected: (_) => setSheetState(() => meters = m),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Custom meter input
+                  const Text('أو أدخل عدد الأمتار:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: meters > 0.5
+                            ? () => setSheetState(() => meters = (meters - 0.5).clamp(0.5, fullLength))
+                            : null,
+                        icon: const Icon(Icons.remove_circle_outline),
+                        color: Colors.red,
+                      ),
+                      Expanded(
+                        child: TextField(
+                          controller: TextEditingController(text: meters.toString()),
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+                          decoration: InputDecoration(
+                            suffixText: 'متر',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          ),
+                          onChanged: (v) {
+                            final val = double.tryParse(v) ?? 0;
+                            setSheetState(() => meters = val.clamp(0.0, fullLength));
+                          },
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: meters < fullLength
+                            ? () => setSheetState(() => meters = (meters + 0.5).clamp(0.5, fullLength))
+                            : null,
+                        icon: const Icon(Icons.add_circle_outline),
+                        color: Colors.green,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Total
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('${meters.toStringAsFixed(1)} متر × ${AppConstants.formatPrice(pricePerMeter)}',
+                                style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                            Text('الإجمالي', style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+                          ],
+                        ),
+                        Text(AppConstants.formatPrice(total),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w900, fontSize: 22, color: AppTheme.primaryColor)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Add to cart button
+                  ElevatedButton.icon(
+                    onPressed: meters > 0
+                        ? () {
+                            final cutProduct = Product(
+                              id: 'CUT-${product.id}-${DateTime.now().millisecondsSinceEpoch}',
+                              name: '${product.name} (${meters.toStringAsFixed(1)} م)',
+                              barcode: product.barcode,
+                              price: total,
+                              costPrice: product.costPrice > 0 && product.fullLength != null && product.fullLength! > 0
+                                  ? (product.costPrice / product.fullLength!) * meters
+                                  : 0,
+                              isPipe: true,
+                              fullLength: meters,
+                              fullPrice: total,
+                              category: product.category,
+                              diameter: product.diameter,
+                            );
+                            context.read<BillingBloc>().add(AddProductToCartEvent(cutProduct));
+                            Navigator.pop(sheetCtx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('${product.name} — ${meters.toStringAsFixed(1)} متر أُضيف للسلة'),
+                                backgroundColor: Colors.green.shade700,
+                                behavior: SnackBarBehavior.floating,
+                                duration: const Duration(milliseconds: 700),
+                              ),
+                            );
+                          }
+                        : null,
+                    icon: const Icon(Icons.add_shopping_cart, color: Colors.white),
+                    label: const Text('أضف للسلة', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -110,6 +315,195 @@ class _ElectricalProductsPageState extends State<ElectricalProductsPage> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _showAddWireSheet() {
+    final nameCtrl = TextEditingController();
+    final lengthCtrl = TextEditingController(text: '100');
+    final priceCtrl = TextEditingController();
+    final costCtrl = TextEditingController();
+    final diameterCtrl = TextEditingController();
+    final meterPriceCtrl = TextEditingController();
+    const uuid = Uuid();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (sheetCtx, setSheetState) {
+          final length = double.tryParse(lengthCtrl.text) ?? 0;
+          final fullPrice = double.tryParse(priceCtrl.text) ?? 0;
+          final autoPrice = (length > 0 && fullPrice > 0) ? fullPrice / length : 0.0;
+          final customMeterPrice = double.tryParse(meterPriceCtrl.text);
+
+          return Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.fromLTRB(
+                20, 20, 20, MediaQuery.of(sheetCtx).viewInsets.bottom + 20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.cable, color: Colors.orange, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text('إضافة سلك / كابل كهربائي',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: () => Navigator.pop(sheetCtx),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _wireField(nameCtrl, 'اسم السلك/الكابل *', Icons.cable,
+                      hint: 'مثلاً: سلك نحاس 2.5mm'),
+                  const SizedBox(height: 12),
+                  _wireField(diameterCtrl, 'المقطع / القطر (اختياري)', Icons.straighten,
+                      hint: 'مثلاً: 1.5mm², 2.5mm², 4mm²'),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _wireField(lengthCtrl, 'طول اللفة (متر) *', Icons.straighten,
+                            keyboard: TextInputType.number,
+                            onChanged: (_) => setSheetState(() {})),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _wireField(priceCtrl, 'سعر اللفة كاملة *', Icons.attach_money,
+                            keyboard: TextInputType.number,
+                            onChanged: (_) => setSheetState(() {})),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _wireField(costCtrl, 'سعر التكلفة (اختياري)', Icons.money_off,
+                      keyboard: TextInputType.number,
+                      hint: 'سعر الشراء للفة كاملة'),
+                  const SizedBox(height: 12),
+                  _wireField(meterPriceCtrl, 'سعر المتر (اختياري)', Icons.price_change,
+                      keyboard: TextInputType.number,
+                      hint: autoPrice > 0
+                          ? 'تلقائي: ${autoPrice.toStringAsFixed(1)} دج/م — أدخل سعر مختلف إن أردت'
+                          : 'إن لم تُدخله يُحسب تلقائياً من سعر اللفة',
+                      onChanged: (_) => setSheetState(() {})),
+                  if (autoPrice > 0) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: (customMeterPrice != null ? Colors.orange : Colors.blue)
+                            .withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            customMeterPrice != null ? Icons.edit : Icons.auto_awesome,
+                            size: 16,
+                            color: customMeterPrice != null ? Colors.orange : Colors.blue,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              customMeterPrice != null
+                                  ? 'سعر المتر المخصص: ${customMeterPrice.toStringAsFixed(1)} دج (بدل ${autoPrice.toStringAsFixed(1)} دج)'
+                                  : 'سعر المتر التلقائي: ${autoPrice.toStringAsFixed(1)} دج',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: customMeterPrice != null ? Colors.orange.shade800 : Colors.blue.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      final name = nameCtrl.text.trim();
+                      final length = double.tryParse(lengthCtrl.text) ?? 0;
+                      final fullPrice = double.tryParse(priceCtrl.text) ?? 0;
+                      if (name.isEmpty || length <= 0 || fullPrice <= 0) return;
+
+                      final autoCalc = fullPrice / length;
+                      final customPrice = double.tryParse(meterPriceCtrl.text);
+                      final finalPricePerMeter = (customPrice != null && customPrice > 0)
+                          ? customPrice
+                          : autoCalc;
+                      final costPrice = double.tryParse(costCtrl.text) ?? 0;
+
+                      final product = Product(
+                        id: uuid.v4(),
+                        name: name,
+                        barcode: 'WIRE-${DateTime.now().millisecondsSinceEpoch}',
+                        price: finalPricePerMeter,
+                        costPrice: costPrice,
+                        isPipe: true,
+                        fullLength: length,
+                        fullPrice: fullPrice,
+                        category: 'كهرباء',
+                        diameter: diameterCtrl.text.trim().isEmpty ? null : diameterCtrl.text.trim(),
+                      );
+                      context.read<ProductBloc>().add(AddProduct(product));
+                      Navigator.pop(sheetCtx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('تم إضافة $name — ${finalPricePerMeter.toStringAsFixed(1)} دج/متر'),
+                          backgroundColor: Colors.green.shade700,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.save, color: Colors.white),
+                    label: const Text('حفظ السلك', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange.shade700,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _wireField(TextEditingController ctrl, String label, IconData icon,
+      {TextInputType? keyboard, String? hint, ValueChanged<String>? onChanged}) {
+    return TextField(
+      controller: ctrl,
+      keyboardType: keyboard,
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        hintStyle: const TextStyle(fontSize: 11),
+        prefixIcon: Icon(icon, size: 20),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      ),
+    );
   }
 
   @override
@@ -131,10 +525,34 @@ class _ElectricalProductsPageState extends State<ElectricalProductsPage> {
           onPressed: () => context.pop(),
         ),
         actions: [
-          IconButton(
+          PopupMenuButton<String>(
             icon: const Icon(Icons.add_circle_outline),
             tooltip: 'إضافة منتج',
-            onPressed: () => context.push('/products/add'),
+            onSelected: (val) {
+              if (val == 'product') {
+                context.push('/products/add');
+              } else if (val == 'wire') {
+                _showAddWireSheet();
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'product',
+                child: Row(children: [
+                  Icon(Icons.lightbulb_outline, size: 20, color: Colors.amber),
+                  SizedBox(width: 8),
+                  Text('منتج عادي (مصباح، مفتاح...)'),
+                ]),
+              ),
+              const PopupMenuItem(
+                value: 'wire',
+                child: Row(children: [
+                  Icon(Icons.cable, size: 20, color: Colors.orange),
+                  SizedBox(width: 8),
+                  Text('سلك / كابل (يباع بالمتر)'),
+                ]),
+              ),
+            ],
           ),
         ],
       ),
@@ -411,23 +829,38 @@ class _ElectricalProductsPageState extends State<ElectricalProductsPage> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Expanded(
-                            child: Text(
-                              AppConstants.formatPrice(product.price),
-                              style: TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 14,
-                                color: AppTheme.primaryColor,
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  product.isPipe
+                                      ? '${AppConstants.formatPrice(product.calculatedPricePerMeter)}/م'
+                                      : AppConstants.formatPrice(product.price),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 14,
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                ),
+                                if (product.isPipe && product.fullLength != null)
+                                  Text(
+                                    'لفة ${product.fullLength!.toStringAsFixed(0)}م',
+                                    style: TextStyle(fontSize: 9, color: Colors.grey[500]),
+                                  ),
+                              ],
                             ),
                           ),
                           Container(
                             width: 30,
                             height: 30,
                             decoration: BoxDecoration(
-                              color: Colors.green.shade600,
+                              color: product.isPipe ? Colors.orange.shade600 : Colors.green.shade600,
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Icon(Icons.add, color: Colors.white, size: 18),
+                            child: Icon(
+                              product.isPipe ? Icons.cable : Icons.add,
+                              color: Colors.white, size: 18,
+                            ),
                           ),
                         ],
                       ),

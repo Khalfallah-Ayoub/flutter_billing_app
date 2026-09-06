@@ -5,8 +5,8 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_constants.dart';
 import '../../../invoice/presentation/bloc/customer_bloc.dart';
 import '../../../invoice/presentation/bloc/invoice_bloc.dart';
+import '../../../billing/presentation/bloc/billing_bloc.dart';
 import '../../../invoice/domain/entities/invoice.dart';
-import '../../../invoice/domain/entities/customer.dart';
 import '../../../returns/presentation/bloc/return_bloc.dart';
 import '../../domain/entities/craftsman.dart';
 
@@ -52,8 +52,17 @@ class _CraftsmanDetailPageState extends State<CraftsmanDetailPage>
         final totalDebt = craftsmanInvoices.fold<double>(0, (s, i) => s + i.remainingAmount);
         final totalPaid = craftsmanInvoices.fold<double>(0, (s, i) => s + i.paidAmount);
 
-        // Unique clients
-        final clientIds = craftsmanInvoices.map((i) => i.customerId).whereType<String>().toSet();
+        // Unique clients from invoices
+        final invoiceClientIds = craftsmanInvoices.map((i) => i.customerId).whereType<String>().toSet();
+        
+        // Also include customers directly linked via Customer.craftsmanId
+        final directLinkedIds = context.read<CustomerBloc>().state.customers
+            .where((c) => c.craftsmanId == widget.craftsman.id)
+            .map((c) => c.id)
+            .toSet();
+        
+        // Merge both sources
+        final allClientIds = {...invoiceClientIds, ...directLinkedIds};
 
         return Scaffold(
           backgroundColor: theme.scaffoldBackgroundColor,
@@ -123,7 +132,7 @@ class _CraftsmanDetailPageState extends State<CraftsmanDetailPage>
                               children: [
                                 _summaryChip(Icons.receipt_long, '${craftsmanInvoices.length} فاتورة'),
                                 const SizedBox(width: 10),
-                                _summaryChip(Icons.people, '${clientIds.length} عميل'),
+                                _summaryChip(Icons.people, '${allClientIds.length} عميل'),
                                 const SizedBox(width: 10),
                                 if (totalDebt > 0)
                                   _summaryChip(Icons.warning_amber, AppConstants.formatPrice(totalDebt),
@@ -145,7 +154,7 @@ class _CraftsmanDetailPageState extends State<CraftsmanDetailPage>
                 delegate: _TabHeaderDelegate(
                   TabBar(
                     controller: _tab,
-                    tabs: const [Tab(text: 'الفواتير'), Tab(text: 'الملخص المالي')],
+                    tabs: const [Tab(text: 'الفواتير'), Tab(text: 'العملاء')],
                   ),
                 ),
               ),
@@ -171,7 +180,11 @@ class _CraftsmanDetailPageState extends State<CraftsmanDetailPage>
                     controller: _tab,
                     children: [
                       _InvoicesTab(invoices: craftsmanInvoices, craftsman: widget.craftsman),
-                      _ClientsTab(clientIds: clientIds, invoices: craftsmanInvoices),
+                      _ClientsTab(
+                        clientIds: allClientIds,
+                        invoices: craftsmanInvoices,
+                        craftsmanId: widget.craftsman.id,
+                      ),
                     ],
                   ),
                 ),
@@ -307,6 +320,15 @@ class _InvoicesTab extends StatelessWidget {
                       ],
                     ),
                   ),
+                  IconButton(
+                    onPressed: () {
+                      context.read<BillingBloc>().add(LoadInvoiceForEditEvent(inv));
+                      context.go('/');
+                    },
+                    icon: const Icon(Icons.edit, size: 20),
+                    tooltip: 'تعديل الفاتورة في سلة المشتريات',
+                    color: Colors.amber.shade800,
+                  ),
                   if (inv.remainingAmount > 0)
                     IconButton(
                       onPressed: () => context.push('/return/${inv.id}', extra: inv),
@@ -332,29 +354,63 @@ class _InvoicesTab extends StatelessWidget {
 class _ClientsTab extends StatelessWidget {
   final Set<String> clientIds;
   final List<Invoice> invoices;
+  final String craftsmanId;
 
-  const _ClientsTab({required this.clientIds, required this.invoices});
+  const _ClientsTab({
+    required this.clientIds,
+    required this.invoices,
+    required this.craftsmanId,
+  });
 
   @override
   Widget build(BuildContext context) {
-    if (clientIds.isEmpty) {
-      return Center(child: Text('لا عملاء مرتبطون', style: TextStyle(color: Colors.grey[500])));
-    }
-
     return BlocBuilder<CustomerBloc, CustomerState>(
       builder: (context, state) {
-        final clients = state.customers
-            .where((c) => clientIds.contains(c.id))
+        // Get all customers: directly linked + from invoices
+        final directLinked = state.customers
+            .where((c) => c.craftsmanId == craftsmanId)
             .toList();
+        final invoiceLinked = state.customers
+            .where((c) => clientIds.contains(c.id) && c.craftsmanId != craftsmanId)
+            .toList();
+        
+        // Merge without duplicates
+        final allClientsMap = <String, dynamic>{};
+        for (final c in directLinked) {
+          allClientsMap[c.id] = c;
+        }
+        for (final c in invoiceLinked) {
+          allClientsMap[c.id] = c;
+        }
+        final allClients = allClientsMap.values.toList();
+
+        if (allClients.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.people_outline, size: 56, color: Colors.grey[300]),
+                const SizedBox(height: 12),
+                Text('لا عملاء مرتبطون بهذا الحرفي',
+                    style: TextStyle(color: Colors.grey[500])),
+                const SizedBox(height: 8),
+                Text('أضف زبائن من صفحة العملاء وأربطهم بهذا الحرفي',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+              ],
+            ),
+          );
+        }
 
         return ListView.separated(
           padding: const EdgeInsets.all(16),
-          itemCount: clients.length,
+          itemCount: allClients.length,
           separatorBuilder: (_, __) => const SizedBox(height: 8),
           itemBuilder: (context, i) {
-            final client = clients[i];
+            final client = allClients[i];
             final clientInvoices = invoices.where((inv) => inv.customerId == client.id).toList();
             final debt = clientInvoices.fold<double>(0, (s, inv) => s + inv.remainingAmount);
+            final totalPurchases = clientInvoices.fold<double>(0, (s, inv) => s + inv.totalAmount);
+            final isDirectlyLinked = client.craftsmanId == craftsmanId;
 
             return Material(
               color: Theme.of(context).cardColor,
@@ -364,37 +420,62 @@ class _ClientsTab extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 child: Padding(
                   padding: const EdgeInsets.all(14),
-                  child: Row(
+                  child: Column(
                     children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.12),
-                        child: Text(client.name[0].toUpperCase(),
-                            style: TextStyle(color: AppTheme.primaryColor,
-                                fontWeight: FontWeight.bold)),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(client.name,
-                                style: const TextStyle(fontWeight: FontWeight.bold)),
-                            Text(client.phone,
-                                style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                      Row(
                         children: [
-                          Text('${clientInvoices.length} فاتورة',
-                              style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-                          if (debt > 0)
-                            Text(AppConstants.formatPrice(debt),
-                                style: const TextStyle(
-                                    fontSize: 13, color: Colors.red,
+                          CircleAvatar(
+                            radius: 20,
+                            backgroundColor: (isDirectlyLinked ? Colors.blue : AppTheme.primaryColor)
+                                .withValues(alpha: 0.12),
+                            child: Text(client.name[0].toUpperCase(),
+                                style: TextStyle(
+                                    color: isDirectlyLinked ? Colors.blue : AppTheme.primaryColor,
                                     fontWeight: FontWeight.bold)),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(client.name,
+                                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    const SizedBox(width: 6),
+                                    if (isDirectlyLinked)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: const Text('مرتبط',
+                                            style: TextStyle(fontSize: 9, color: Colors.blue,
+                                                fontWeight: FontWeight.bold)),
+                                      ),
+                                  ],
+                                ),
+                                Text(client.phone,
+                                    style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text('${clientInvoices.length} فاتورة',
+                                  style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                              if (totalPurchases > 0)
+                                Text(AppConstants.formatPrice(totalPurchases),
+                                    style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                              if (debt > 0)
+                                Text(AppConstants.formatPrice(debt),
+                                    style: const TextStyle(
+                                        fontSize: 13, color: Colors.red,
+                                        fontWeight: FontWeight.bold)),
+                            ],
+                          ),
                         ],
                       ),
                     ],

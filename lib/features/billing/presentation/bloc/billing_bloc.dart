@@ -6,6 +6,8 @@ import 'package:billing_app/features/product/domain/usecases/product_usecases.da
 import '../../../../core/utils/printer_helper.dart';
 import '../../../../core/data/hive_database.dart';
 
+import '../../../invoice/domain/entities/invoice.dart';
+
 part 'billing_event.dart';
 part 'billing_state.dart';
 
@@ -19,7 +21,37 @@ class BillingBloc extends Bloc<BillingEvent, BillingState> {
     on<RemoveProductFromCartEvent>(_onRemoveProductFromCart);
     on<UpdateQuantityEvent>(_onUpdateQuantity);
     on<ClearCartEvent>(_onClearCart);
+    on<LoadInvoiceForEditEvent>(_onLoadInvoiceForEdit);
+    on<CancelEditInvoiceEvent>(_onCancelEditInvoice);
     on<PrintReceiptEvent>(_onPrintReceipt);
+  }
+
+  void _onLoadInvoiceForEdit(
+      LoadInvoiceForEditEvent event, Emitter<BillingState> emit) {
+    final inv = event.invoice;
+    final items = inv.items.map((item) {
+      final product = Product(
+        id: item.productId,
+        name: item.productName,
+        price: item.unitPrice,
+        isPipe: item.isPipe,
+        barcode: item.barcode,
+      );
+      return CartItem(
+        product: product,
+        quantity: item.quantity.toInt(),
+      );
+    }).toList();
+
+    emit(state.copyWith(
+      cartItems: items,
+      editingInvoice: inv,
+    ));
+  }
+
+  void _onCancelEditInvoice(
+      CancelEditInvoiceEvent event, Emitter<BillingState> emit) {
+    emit(const BillingState());
   }
 
   Future<void> _onScanBarcode(

@@ -620,24 +620,59 @@ class _HomePageState extends State<HomePage> {
             builder: (context, state) {
               final totalItems =
                   state.cartItems.fold<int>(0, (sum, i) => sum + i.quantity);
-              return Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              return Column(
+                children: [
+                  if (state.editingInvoice != null) ...[
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.amber),
+                      ),
+                      child: Row(
                         children: [
-                          const Text('سلة المشتريات',
-                              style: TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.w600)),
-                          Text('$totalItems منتج',
-                              style: const TextStyle(
-                                  fontSize: 12, color: Colors.grey)),
+                          const Icon(Icons.edit_note, color: Colors.amber, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'تعديل الفاتورة: ${state.editingInvoice!.invoiceNumber} (${state.editingInvoice!.customerName})',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () {
+                              context.read<BillingBloc>().add(CancelEditInvoiceEvent());
+                            },
+                            child: const Padding(
+                              padding: EdgeInsets.all(4.0),
+                              child: Text('إلغاء التعديل',
+                                  style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
                         ],
                       ),
                     ),
+                  ],
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('سلة المشتريات',
+                                  style: TextStyle(
+                                      fontSize: 18, fontWeight: FontWeight.w600)),
+                              Text('$totalItems منتج',
+                                  style: const TextStyle(
+                                      fontSize: 12, color: Colors.grey)),
+                            ],
+                          ),
+                        ),
                     // Pipe POS Shortcut Button
                     Material(
                       color: Colors.amber.withValues(alpha: 0.15),
@@ -711,7 +746,9 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ],
                 ),
-              );
+              ),
+            ],
+          );
             },
           ),
 

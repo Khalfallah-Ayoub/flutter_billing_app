@@ -513,51 +513,5 @@ class _AddEditPipePageState extends State<AddEditPipePage> {
       ),
     );
   }
-
-  Widget _buildTypeChoiceChip(String type, String label, String defaultLen, Color accentColor) {
-    final isSelected = _pipeType == type;
-    return Expanded(
-      child: InkWell(
-        onTap: () => _onPipeTypeChanged(type),
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? accentColor.withValues(alpha: 0.15) : Theme.of(context).cardTheme.color,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected ? accentColor : Colors.grey.withValues(alpha: 0.2),
-              width: isSelected ? 2 : 1,
-            ),
-          ),
-          child: Column(
-            children: [
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  fontSize: 12,
-                  color: isSelected ? accentColor : Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  defaultLen,
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: accentColor),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
+

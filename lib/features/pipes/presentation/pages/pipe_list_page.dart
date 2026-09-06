@@ -7,7 +7,6 @@ import '../../../product/presentation/bloc/product_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_constants.dart';
 
-import '../../domain/entities/pipe_category.dart';
 import '../../data/services/pipe_category_service.dart';
 
 class PipeListPage extends StatefulWidget {

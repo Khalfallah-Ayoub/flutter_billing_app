@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_constants.dart';
 import '../../../invoice/presentation/bloc/invoice_bloc.dart';
+import '../../../invoice/presentation/bloc/customer_bloc.dart';
 import '../bloc/craftsman_bloc.dart';
 import '../../domain/entities/craftsman.dart';
 
@@ -359,11 +360,16 @@ class _CraftsmanCard extends StatelessWidget {
         final clientInvoices = invoiceState.allInvoices
             .where((inv) => inv.craftsmanId == craftsman.id).toList();
         final totalDebt = clientInvoices.fold<double>(0, (s, i) => s + i.remainingAmount);
-        final clientCount = invoiceState.allInvoices
-            .where((inv) => inv.craftsmanId == craftsman.id)
+        // Count clients from invoices + directly linked via Customer.craftsmanId
+        final invoiceClientIds = clientInvoices
             .map((inv) => inv.customerId)
-            .toSet()
-            .length;
+            .whereType<String>()
+            .toSet();
+        final directLinkedCount = context.read<CustomerBloc>().state.customers
+            .where((c) => c.craftsmanId == craftsman.id)
+            .map((c) => c.id)
+            .toSet();
+        final clientCount = {...invoiceClientIds, ...directLinkedCount}.length;
 
         return Material(
           color: theme.cardColor,

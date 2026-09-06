@@ -7,6 +7,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_constants.dart';
 import '../../domain/entities/invoice.dart';
 import '../bloc/invoice_bloc.dart';
+import '../../../billing/presentation/bloc/billing_bloc.dart';
 import '../../data/services/invoice_pdf_service.dart';
 
 class InvoiceListPage extends StatefulWidget {
@@ -390,6 +391,15 @@ class _InvoiceListPageState extends State<InvoiceListPage>
                                     onTap: () => InvoicePdfService.callCustomer(
                                         inv.customerPhone!),
                                   ),
+                                _ActionBtn(
+                                  icon: Icons.edit,
+                                  color: Colors.amber.shade800,
+                                  tooltip: 'تعديل الفاتورة في لائحة البيع',
+                                  onTap: () {
+                                    context.read<BillingBloc>().add(LoadInvoiceForEditEvent(inv));
+                                    context.go('/');
+                                  },
+                                ),
                                 _ActionBtn(
                                   icon: Icons.share,
                                   color: AppTheme.primaryColor,

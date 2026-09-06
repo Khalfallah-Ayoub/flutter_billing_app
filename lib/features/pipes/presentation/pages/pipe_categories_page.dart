@@ -37,7 +37,6 @@ class _PipeCategoriesPageState extends State<PipeCategoriesPage> {
     showDialog(
       context: context,
       builder: (context) {
-        final theme = Theme.of(context);
         return AlertDialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

@@ -28,6 +28,7 @@ class CheckoutPage extends StatefulWidget {
 
 class _CheckoutPageState extends State<CheckoutPage> {
   final _uuid = const Uuid();
+  bool _isProcessing = false;
 
   Customer? _selectedCustomer;
   Craftsman? _selectedCraftsman; // حرفي مرتبط بالعميل
@@ -39,6 +40,36 @@ class _CheckoutPageState extends State<CheckoutPage> {
   String _paymentOption = 'cash'; // 'cash', 'debt', 'partial'
 
   @override
+  void initState() {
+    super.initState();
+    final billingState = context.read<BillingBloc>().state;
+    if (billingState.editingInvoice != null) {
+      final inv = billingState.editingInvoice!;
+      _customerNameCtrl.text = inv.customerName;
+      _customerPhoneCtrl.text = inv.customerPhone ?? '';
+      _discountCtrl.text = inv.discount.toStringAsFixed(0);
+      _paidAmountCtrl.text = inv.paidAmount.toStringAsFixed(0);
+      _paymentOption = inv.paymentMethod == 'debt'
+          ? 'debt'
+          : (inv.remainingAmount > 0 ? 'partial' : 'cash');
+
+      if (inv.craftsmanId != null) {
+        final craftsmen = context.read<CraftsmanBloc>().state.craftsmen;
+        try {
+          _selectedCraftsman = craftsmen.firstWhere((c) => c.id == inv.craftsmanId);
+        } catch (_) {}
+      }
+
+      if (inv.customerId != null) {
+        final customers = context.read<CustomerBloc>().state.customers;
+        try {
+          _selectedCustomer = customers.firstWhere((c) => c.id == inv.customerId);
+        } catch (_) {}
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _customerNameCtrl.dispose();
     _customerPhoneCtrl.dispose();
@@ -48,8 +79,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   void _processInvoiceCheckout(BillingState billingState, ShopState shopState) {
+    if (_isProcessing) return;
     if (billingState.cartItems.isEmpty) return;
 
+    // Set flag immediately — only reset when user closes the result dialog
+    if (mounted) setState(() => _isProcessing = true);
+
+    final editingInvoice = billingState.editingInvoice;
     final subtotal = billingState.totalAmount;
     final discount = double.tryParse(_discountCtrl.text) ?? 0.0;
     final totalAmount = (subtotal - discount).clamp(0.0, double.infinity);
@@ -70,7 +106,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       status = PaymentStatus.unpaid;
     }
 
-    final invoiceNumber = InvoiceService.generateNextInvoiceNumber();
+    final invoiceNumber = editingInvoice?.invoiceNumber ?? InvoiceService.generateNextInvoiceNumber();
 
     // Map cart items to InvoiceItems
     final invoiceItems = billingState.cartItems.map((cartItem) {
@@ -91,8 +127,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
       );
     }).toList();
 
-    final List<PaymentRecord> initialPaymentHistory = [];
-    if (paid > 0) {
+    final List<PaymentRecord> initialPaymentHistory = editingInvoice != null
+        ? List.from(editingInvoice.paymentHistory)
+        : [];
+    if (paid > 0 && editingInvoice == null) {
       initialPaymentHistory.add(PaymentRecord(
         id: _uuid.v4(),
         amount: paid,
@@ -101,10 +139,29 @@ class _CheckoutPageState extends State<CheckoutPage> {
       ));
     }
 
+    // Auto-create customer if it's a new name (not selected from dropdown)
+    String? customerId = _selectedCustomer?.id ?? editingInvoice?.customerId;
+    if (_selectedCustomer == null && editingInvoice == null) {
+      final customerName = _customerNameCtrl.text.trim();
+      final customerPhone = _customerPhoneCtrl.text.trim();
+      if (customerName.isNotEmpty && customerName != 'زبون عادي') {
+        final newCustomer = Customer(
+          id: _uuid.v4(),
+          name: customerName,
+          phone: customerPhone,
+          createdAt: DateTime.now(),
+          craftsmanId: _selectedCraftsman?.id,
+          craftsmanName: _selectedCraftsman?.name,
+        );
+        context.read<CustomerBloc>().add(AddCustomerEvent(newCustomer));
+        customerId = newCustomer.id;
+      }
+    }
+
     final invoice = Invoice(
-      id: _uuid.v4(),
+      id: editingInvoice?.id ?? _uuid.v4(),
       invoiceNumber: invoiceNumber,
-      customerId: _selectedCustomer?.id,
+      customerId: customerId,
       customerName: _customerNameCtrl.text.trim().isEmpty ? 'زبون عادي' : _customerNameCtrl.text.trim(),
       customerPhone: _customerPhoneCtrl.text.trim().isEmpty ? null : _customerPhoneCtrl.text.trim(),
       items: invoiceItems,
@@ -116,31 +173,39 @@ class _CheckoutPageState extends State<CheckoutPage> {
       paymentStatus: status,
       paymentMethod: _paymentOption == 'cash' ? 'cash' : 'debt',
       paymentHistory: initialPaymentHistory,
-      createdAt: DateTime.now(),
+      createdAt: editingInvoice?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
-      craftsmanId: _selectedCraftsman?.id,
-      craftsmanName: _selectedCraftsman?.name,
+      craftsmanId: _selectedCraftsman?.id ?? editingInvoice?.craftsmanId,
+      craftsmanName: _selectedCraftsman?.name ?? editingInvoice?.craftsmanName,
+      returnIds: editingInvoice?.returnIds ?? const [],
     );
 
-    // Save invoice — NO automatic printing, user chooses in dialog
-    context.read<InvoiceBloc>().add(AddInvoiceEvent(invoice));
+    if (editingInvoice != null) {
+      context.read<InvoiceBloc>().add(UpdateInvoiceEvent(invoice));
+    } else {
+      context.read<InvoiceBloc>().add(AddInvoiceEvent(invoice));
+    }
 
-    // Show post-save options dialog
-    _showInvoiceCreatedOptionsDialog(invoice);
+    // Show post-save options dialog — _isProcessing stays true until user closes it
+    _showInvoiceCreatedOptionsDialog(invoice, isEdit: editingInvoice != null);
   }
 
-  void _showInvoiceCreatedOptionsDialog(Invoice invoice) {
+  void _showInvoiceCreatedOptionsDialog(Invoice invoice, {bool isEdit = false}) {
+    void resetProcessing() {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (dialogCtx) {
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
+          title: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.green, size: 28),
-              SizedBox(width: 10),
-              Text('تم حفظ الفاتورة وإكمال العملية!'),
+              const Icon(Icons.check_circle, color: Colors.green, size: 28),
+              const SizedBox(width: 10),
+              Flexible(child: Text(isEdit ? 'تم تعديل الفاتورة بنجاح!' : 'تم حفظ الفاتورة وإكمال العملية!')),
             ],
           ),
           content: Column(
@@ -170,8 +235,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: () {
+                      resetProcessing();
                       Navigator.pop(dialogCtx);
+                      context.read<BillingBloc>().add(ClearCartEvent());
                       InvoicePdfService.printInvoice(invoice);
+                      context.go('/');
                     },
                     icon: const Icon(Icons.print, color: Colors.white),
                     label: const Text('طباعة الفاتورة PDF', style: TextStyle(color: Colors.white)),
@@ -183,8 +251,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: () {
+                      resetProcessing();
                       Navigator.pop(dialogCtx);
+                      context.read<BillingBloc>().add(ClearCartEvent());
                       InvoicePdfService.shareInvoicePdf(invoice);
+                      context.go('/');
                     },
                     icon: const Icon(Icons.share, color: Colors.green),
                     label: const Text('مشاركة الفاتورة عبر واتساب', style: TextStyle(color: Colors.green)),
@@ -195,12 +266,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   width: double.infinity,
                   child: TextButton.icon(
                     onPressed: () {
+                      resetProcessing();
                       Navigator.pop(dialogCtx);
                       context.read<BillingBloc>().add(ClearCartEvent());
                       context.go('/');
                     },
                     icon: const Icon(Icons.shopping_cart, size: 18),
-                    label: const Text('بيع جديد', style: TextStyle(fontWeight: FontWeight.bold)),
+                    label: const Text('بيع جديد / إنهاء', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -220,7 +292,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       canPop: false,
       onPopInvokedWithResult: (bool didPop, dynamic result) {
         if (didPop) return;
-        context.read<BillingBloc>().add(ClearCartEvent());
+        // Don't clear cart on back — preserve edit session so user can go back and modify
         context.go('/');
       },
       child: Scaffold(
@@ -328,6 +400,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                                   _selectedCustomer = c;
                                                   _customerNameCtrl.text = c.name;
                                                   _customerPhoneCtrl.text = c.phone;
+                                                  // Auto-load linked craftsman if customer has one
+                                                  if (c.craftsmanId != null && c.craftsmanId!.isNotEmpty) {
+                                                    final craftsmen = context.read<CraftsmanBloc>().state.craftsmen;
+                                                    try {
+                                                      _selectedCraftsman = craftsmen.firstWhere((cr) => cr.id == c.craftsmanId);
+                                                    } catch (_) {
+                                                      // Craftsman not found, keep current selection
+                                                    }
+                                                  }
                                                 });
                                               }
                                             },
@@ -523,10 +604,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           ),
                           const SizedBox(height: 12),
                           PrimaryButton(
-                            onPressed: () => _processInvoiceCheckout(billingState, shopState),
-                            label: 'إكمال الدفع وحفظ الفاتورة',
+                            onPressed: _isProcessing ? null : () => _processInvoiceCheckout(billingState, shopState),
+                            label: _isProcessing ? 'جاري الحفظ...' : 'إكمال الدفع وحفظ الفاتورة',
                             icon: Icons.check_circle,
-                            isLoading: billingState.isPrinting,
+                            isLoading: _isProcessing,
                           ),
                         ],
                       ),

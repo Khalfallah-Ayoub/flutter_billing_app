@@ -11,6 +11,8 @@ import '../bloc/customer_bloc.dart';
 import '../bloc/invoice_bloc.dart';
 import '../../data/services/customer_service.dart';
 import '../../data/services/invoice_pdf_service.dart';
+import '../../../craftsman/presentation/bloc/craftsman_bloc.dart';
+import '../../../craftsman/domain/entities/craftsman.dart';
 
 class CustomerListPage extends StatefulWidget {
   const CustomerListPage({super.key});
@@ -44,73 +46,152 @@ class _CustomerListPageState extends State<CustomerListPage> {
     final addressCtrl = TextEditingController(text: existing?.address ?? '');
     final notesCtrl = TextEditingController(text: existing?.notes ?? '');
 
+    // Load craftsman for existing customer
+    Craftsman? selectedCraftsman;
+    if (existing?.craftsmanId != null && existing!.craftsmanId!.isNotEmpty) {
+      final craftsmen = context.read<CraftsmanBloc>().state.craftsmen;
+      try {
+        selectedCraftsman = craftsmen.firstWhere((c) => c.id == existing.craftsmanId);
+      } catch (_) {}
+    }
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Row(children: [
-          Icon(existing == null ? Icons.person_add : Icons.edit,
-              color: AppTheme.primaryColor, size: 22),
-          const SizedBox(width: 8),
-          Text(existing == null ? 'إضافة زبون' : 'تعديل الزبون'),
-        ]),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _DialogField(ctrl: nameCtrl, label: 'الاسم *', icon: Icons.person),
-              const SizedBox(height: 10),
-              _DialogField(
-                  ctrl: phoneCtrl,
-                  label: 'الهاتف *',
-                  icon: Icons.phone,
-                  type: TextInputType.phone),
-              const SizedBox(height: 10),
-              _DialogField(
-                  ctrl: addressCtrl,
-                  label: 'العنوان (اختياري)',
-                  icon: Icons.location_on),
-              const SizedBox(height: 10),
-              _DialogField(
-                  ctrl: notesCtrl,
-                  label: 'ملاحظات (اختياري)',
-                  icon: Icons.note_alt),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton.icon(
-            onPressed: () {
-              final name = nameCtrl.text.trim();
-              final phone = phoneCtrl.text.trim();
-              if (name.isEmpty || phone.isEmpty) return;
-              final customer = Customer(
-                id: existing?.id ?? _uuid.v4(),
-                name: name,
-                phone: phone,
-                address: addressCtrl.text.trim().isEmpty
-                    ? null
-                    : addressCtrl.text.trim(),
-                notes: notesCtrl.text.trim().isEmpty
-                    ? null
-                    : notesCtrl.text.trim(),
-                createdAt: existing?.createdAt ?? DateTime.now(),
-              );
-              if (existing == null) {
-                context.read<CustomerBloc>().add(AddCustomerEvent(customer));
-              } else {
-                context.read<CustomerBloc>().add(UpdateCustomerEvent(customer));
-              }
-              Navigator.pop(ctx);
-            },
-            icon: const Icon(Icons.save, size: 18, color: Colors.white),
-            label: const Text('حفظ', style: TextStyle(color: Colors.white)),
-            style:
-                ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
-          ),
-        ],
-      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final craftsmen = context.read<CraftsmanBloc>().state.craftsmen;
+            return AlertDialog(
+              title: Row(children: [
+                Icon(existing == null ? Icons.person_add : Icons.edit,
+                    color: AppTheme.primaryColor, size: 22),
+                const SizedBox(width: 8),
+                Text(existing == null ? 'إضافة زبون' : 'تعديل الزبون'),
+              ]),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _DialogField(ctrl: nameCtrl, label: 'الاسم *', icon: Icons.person),
+                    const SizedBox(height: 10),
+                    _DialogField(
+                        ctrl: phoneCtrl,
+                        label: 'الهاتف *',
+                        icon: Icons.phone,
+                        type: TextInputType.phone),
+                    const SizedBox(height: 10),
+                    _DialogField(
+                        ctrl: addressCtrl,
+                        label: 'العنوان (اختياري)',
+                        icon: Icons.location_on),
+                    const SizedBox(height: 10),
+                    _DialogField(
+                        ctrl: notesCtrl,
+                        label: 'ملاحظات (اختياري)',
+                        icon: Icons.note_alt),
+                    const SizedBox(height: 14),
+                    // ── Craftsman Linking ──
+                    if (craftsmen.isNotEmpty) ...[
+                      const Align(
+                        alignment: Alignment.centerRight,
+                        child: Text('ربط بحرفي (اختياري)',
+                            style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: selectedCraftsman != null
+                                ? AppTheme.primaryColor.withValues(alpha: 0.5)
+                                : Colors.grey.withValues(alpha: 0.3),
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<Craftsman?>(
+                            value: selectedCraftsman,
+                            isExpanded: true,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            hint: const Row(children: [
+                              Icon(Icons.engineering, size: 18, color: Colors.grey),
+                              SizedBox(width: 8),
+                              Text('بدون حرفي', style: TextStyle(color: Colors.grey, fontSize: 14)),
+                            ]),
+                            items: [
+                              const DropdownMenuItem<Craftsman?>(
+                                value: null,
+                                child: Text('بدون حرفي', style: TextStyle(color: Colors.grey)),
+                              ),
+                              ...craftsmen.map((c) => DropdownMenuItem<Craftsman?>(
+                                value: c,
+                                child: Row(children: [
+                                  Icon(Icons.engineering, size: 16, color: AppTheme.primaryColor),
+                                  const SizedBox(width: 8),
+                                  Text('${c.name}${c.specialty != null ? " (${c.specialty})" : ""}'),
+                                ]),
+                              )),
+                            ],
+                            onChanged: (c) => setDialogState(() => selectedCraftsman = c),
+                          ),
+                        ),
+                      ),
+                      if (selectedCraftsman != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Row(children: [
+                            Icon(Icons.link, size: 14, color: Colors.green[600]),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                'سيتم ربط هذا الزبون بالحرفي ${selectedCraftsman!.name}',
+                                style: TextStyle(fontSize: 11, color: Colors.green[700]),
+                              ),
+                            ),
+                          ]),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    final name = nameCtrl.text.trim();
+                    final phone = phoneCtrl.text.trim();
+                    if (name.isEmpty || phone.isEmpty) return;
+                    final customer = Customer(
+                      id: existing?.id ?? _uuid.v4(),
+                      name: name,
+                      phone: phone,
+                      address: addressCtrl.text.trim().isEmpty
+                          ? null
+                          : addressCtrl.text.trim(),
+                      notes: notesCtrl.text.trim().isEmpty
+                          ? null
+                          : notesCtrl.text.trim(),
+                      createdAt: existing?.createdAt ?? DateTime.now(),
+                      craftsmanId: selectedCraftsman?.id,
+                      craftsmanName: selectedCraftsman?.name,
+                    );
+                    if (existing == null) {
+                      context.read<CustomerBloc>().add(AddCustomerEvent(customer));
+                    } else {
+                      context.read<CustomerBloc>().add(UpdateCustomerEvent(customer));
+                    }
+                    Navigator.pop(ctx);
+                  },
+                  icon: const Icon(Icons.save, size: 18, color: Colors.white),
+                  label: const Text('حفظ', style: TextStyle(color: Colors.white)),
+                  style:
+                      ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryColor),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -405,6 +486,19 @@ class _CustomerListPageState extends State<CustomerListPage> {
                               style: const TextStyle(
                                   fontSize: 12, color: Colors.grey)),
                         ]),
+                        if (c.craftsmanName != null && c.craftsmanName!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Row(children: [
+                              Icon(Icons.engineering,
+                                  size: 13, color: Colors.blue[600]),
+                              const SizedBox(width: 3),
+                              Text('حرفي: ${c.craftsmanName}',
+                                  style: TextStyle(
+                                      fontSize: 11, color: Colors.blue[600],
+                                      fontWeight: FontWeight.w500)),
+                            ]),
+                          ),
                       ],
                     ),
                   ),

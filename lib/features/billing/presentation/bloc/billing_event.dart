@@ -37,6 +37,15 @@ class UpdateQuantityEvent extends BillingEvent {
 
 class ClearCartEvent extends BillingEvent {}
 
+class LoadInvoiceForEditEvent extends BillingEvent {
+  final Invoice invoice;
+  const LoadInvoiceForEditEvent(this.invoice);
+  @override
+  List<Object> get props => [invoice];
+}
+
+class CancelEditInvoiceEvent extends BillingEvent {}
+
 class PrintReceiptEvent extends BillingEvent {
   final String shopName;
   final String address1;
